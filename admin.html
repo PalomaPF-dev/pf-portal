@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>業務アプリポータル 管理｜株式会社パロマ 生産・調達統括本部</title>
+  <meta name="theme-color" content="#ffffff" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="icon" href="/icon-192.png" type="image/png" />
+  <style>
+    :root {
+      --red: #dc000c;
+      --ink: #333333;
+      --sub: #707070;
+      --line: #e5e5e5;
+      --bg: #ffffff;
+      --soft: #f7f7f5;
+      --dark: #323232;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Open Sans", "Hiragino Kaku Gothic ProN", "ヒラギノ角ゴ ProN W3", "Noto Sans JP", sans-serif;
+      background: var(--bg); color: var(--ink); min-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+    .brandline { height: 4px; background: var(--red); }
+    header.site {
+      background: #fff; border-bottom: 1px solid var(--line);
+      padding: 12px 20px; display: flex; align-items: center; gap: 12px;
+      position: sticky; top: 0; z-index: 10;
+    }
+    .mark {
+      width: 42px; height: 42px; border-radius: 9px; background: var(--red);
+      color: #fff; font-weight: 800; font-size: 17px; letter-spacing: -0.5px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    header.site .brandlogo { height: 30px; width: auto; display: block; flex-shrink: 0; }
+    header.site .divider { width: 1px; height: 26px; background: var(--line); flex-shrink: 0; }
+    header.site .name { font-size: 14.5px; font-weight: 700; letter-spacing: .02em; }
+    header.site .back {
+      margin-left: auto; font-size: 12px; color: var(--sub); text-decoration: none;
+      border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; flex-shrink: 0;
+    }
+    header.site .back:hover { border-color: var(--red); color: var(--red); }
+    .wrap { max-width: 960px; margin: 0 auto; width: 100%; padding: 0 16px; flex: 1; }
+
+    .lead { padding: 22px 2px 4px; }
+    .lead h1 { font-size: 17px; font-weight: 700; letter-spacing: .02em; }
+    .lead h1::after {
+      content: ""; display: block; width: 34px; height: 3px; background: var(--red);
+      margin-top: 8px; border-radius: 2px;
+    }
+    .lead p { font-size: 12.5px; color: var(--sub); margin-top: 10px; line-height: 1.8; }
+
+    .card {
+      background: #fff; border: 1px solid var(--line); border-radius: 12px;
+      padding: 18px 18px; margin-top: 14px;
+    }
+    .card h2 { font-size: 13.5px; font-weight: 700; margin-bottom: 12px; }
+
+    label.f { display: block; font-size: 11.5px; color: var(--sub); margin: 10px 0 4px; }
+    input[type="text"], input[type="password"], input[type="number"], input[type="email"], select {
+      width: 100%; border: 1px solid var(--line); border-radius: 8px;
+      padding: 9px 10px; font-size: 13px; font-family: inherit; background: #fff; color: var(--ink);
+    }
+    input:focus, select:focus { outline: none; border-color: var(--red); }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+    @media (max-width: 560px) { .row2 { grid-template-columns: 1fr; } }
+
+    button.primary {
+      background: var(--red); color: #fff; border: none; border-radius: 8px;
+      padding: 10px 18px; font-size: 13px; font-weight: 700; font-family: inherit;
+      cursor: pointer; margin-top: 14px;
+    }
+    button.primary:hover { opacity: .92; }
+    button.primary:disabled { background: #ccc; cursor: default; }
+    button.ghost {
+      background: #fff; color: var(--ink); border: 1px solid var(--line); border-radius: 8px;
+      padding: 10px 16px; font-size: 12.5px; font-family: inherit; cursor: pointer; margin-top: 14px;
+    }
+    button.ghost:hover { border-color: var(--red); color: var(--red); }
+    button.mini {
+      background: #fff; border: 1px solid var(--line); border-radius: 7px;
+      padding: 5px 10px; font-size: 11.5px; font-family: inherit; cursor: pointer; color: var(--ink);
+      white-space: nowrap;
+    }
+    button.mini:hover { border-color: var(--red); color: var(--red); }
+    button.mini.danger:hover { border-color: var(--red); color: var(--red); }
+
+    .msg { font-size: 12px; margin-top: 10px; line-height: 1.7; }
+    .msg.err { color: var(--red); }
+    .msg.ok { color: #1a7f37; }
+
+    /* タブ */
+    .tabs { display: flex; gap: 6px; margin-top: 18px; border-bottom: 2px solid var(--line); }
+    .tabs button {
+      background: none; border: none; font-family: inherit; cursor: pointer;
+      font-size: 13px; font-weight: 700; color: var(--sub);
+      padding: 10px 14px; border-bottom: 3px solid transparent; margin-bottom: -2px;
+    }
+    .tabs button.on { color: var(--ink); border-bottom-color: var(--red); }
+
+    /* テーブル */
+    .tblwrap { overflow-x: auto; margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; }
+    table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 640px; }
+    table.tbl th {
+      background: var(--soft); color: var(--sub); font-size: 11px; font-weight: 600;
+      text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); white-space: nowrap;
+    }
+    table.tbl td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    table.tbl tr:last-child td { border-bottom: none; }
+    table.tbl td .sub { color: var(--sub); font-size: 11px; }
+
+    .badge {
+      display: inline-block; font-size: 10.5px; font-weight: 700; border-radius: 6px;
+      padding: 2px 7px; margin: 1px 2px 1px 0; white-space: nowrap;
+    }
+    .b-created { background: #e8f5e9; color: #1a7f37; }
+    .b-exists  { background: #eeeeee; color: #555; }
+    .b-error   { background: #fdecea; color: var(--red); }
+    .b-duplicate { background: #fff3e0; color: #b26a00; }
+    .b-plain   { background: var(--soft); color: var(--sub); }
+
+    .chip {
+      display: inline-block; font-size: 10.5px; border: 1px solid var(--line);
+      border-radius: 6px; padding: 2px 7px; margin: 1px 3px 1px 0; color: var(--sub); white-space: nowrap;
+    }
+
+    .appchecks { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; margin-top: 6px; }
+    .appchecks label {
+      display: flex; align-items: center; gap: 7px; font-size: 12.5px;
+      border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; cursor: pointer;
+    }
+    .appchecks label:hover { border-color: var(--red); }
+    .appchecks input { accent-color: var(--red); }
+
+    .note {
+      margin-top: 14px; background: var(--soft); border: 1px solid var(--line);
+      border-radius: 12px; padding: 12px 16px;
+      font-size: 12px; color: #555; line-height: 1.9;
+    }
+    .note strong { color: var(--ink); }
+
+    .linksbox { background: var(--soft); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+    .linksbox .lrow { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; flex-wrap: wrap; }
+    .linksbox .lrow .an { font-weight: 700; min-width: 64px; }
+    .linksbox .lrow .url {
+      font-size: 11px; color: var(--sub); word-break: break-all;
+      flex: 1; min-width: 160px;
+    }
+
+    .toolbar { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+    .toolbar .sp { flex: 1; }
+    .filebox { font-size: 12.5px; }
+    .hidden { display: none !important; }
+    .tabsec { padding-bottom: 40px; }
+    a.plain { color: var(--red); }
+
+    footer.site {
+      background: var(--dark); color: #fff; text-align: center;
+      font-size: 11px; letter-spacing: .08em; padding: 18px 12px; margin-top: 8px;
+    }
+    footer.site .c { opacity: .75; }
+  </style>
+</head>
+<body>
+  <div class="brandline"></div>
+  <header class="site">
+    <img class="brandlogo" src="/paloma-logo.png" alt="株式会社パロマ" />
+    <span class="divider"></span>
+    <div class="name">生産・調達統括本部　業務アプリポータル 管理</div>
+    <a class="back" href="/">← ポータルへ</a>
+  </header>
+
+  <div class="wrap">
+    <!-- ログイン -->
+    <section id="loginView" class="hidden">
+      <div class="lead">
+        <h1>管理者ログイン</h1>
+        <p>ポータルの職場設定・ユーザー管理を行います。管理者パスワードを入力してください。</p>
+      </div>
+      <div class="card" style="max-width:420px">
+        <label class="f">管理者ID</label>
+        <input type="text" value="admin" disabled />
+        <label class="f">パスワード</label>
+        <input type="password" id="loginPw" autocomplete="current-password" />
+        <button class="primary" id="loginBtn" type="button">ログイン</button>
+        <div class="msg err hidden" id="loginMsg"></div>
+      </div>
+    </section>
+
+    <!-- 管理画面 -->
+    <section id="adminView" class="hidden">
+      <div class="lead">
+        <h1>ポータル管理</h1>
+        <p>職場（部署・工場）ごとの表示アプリと、ユーザーのアカウント発行を管理します。</p>
+      </div>
+
+      <div class="tabs">
+        <button data-tab="depts" class="on" type="button">部署設定</button>
+        <button data-tab="users" type="button">ユーザー設定</button>
+        <button data-tab="csv" type="button">CSV一括登録</button>
+        <span style="margin-left:auto"></span>
+        <button data-tab="" id="logoutBtn" type="button" style="color:var(--sub);font-weight:400;font-size:12px">ログアウト</button>
+      </div>
+
+      <!-- ① 部署設定 -->
+      <div id="tab-depts" class="tabsec">
+        <div class="toolbar">
+          <div class="sp"></div>
+          <button class="ghost" id="deptAddBtn" type="button" style="margin-top:0">＋ 職場を追加</button>
+        </div>
+
+        <div class="card hidden" id="deptFormCard">
+          <h2 id="deptFormTitle">職場を追加</h2>
+          <div class="row2">
+            <div>
+              <label class="f">職場コード（必須・半角英数）</label>
+              <input type="text" id="dfCode" placeholder="例: D001" />
+            </div>
+            <div>
+              <label class="f">種別</label>
+              <select id="dfKind">
+                <option value="dept">部署</option>
+                <option value="factory">工場</option>
+              </select>
+            </div>
+          </div>
+          <div class="row2">
+            <div>
+              <label class="f">職場名（必須）</label>
+              <input type="text" id="dfName" placeholder="例: 生産管理部" />
+            </div>
+            <div>
+              <label class="f">並び順（小さいほど上に表示）</label>
+              <input type="number" id="dfSort" value="0" />
+            </div>
+          </div>
+          <label class="f">説明（所属選択画面に表示されます）</label>
+          <input type="text" id="dfDesc" placeholder="例: 計画・日報・出荷・在庫" />
+          <label class="f">表示アプリ</label>
+          <div class="appchecks" id="dfApps"></div>
+          <div>
+            <button class="primary" id="dfSave" type="button">保存</button>
+            <button class="ghost" id="dfCancel" type="button">キャンセル</button>
+          </div>
+          <div class="msg err hidden" id="dfMsg"></div>
+        </div>
+
+        <div class="tblwrap">
+          <table class="tbl">
+            <thead>
+              <tr><th>職場コード</th><th>種別</th><th>職場名</th><th>説明</th><th>表示アプリ</th><th>並び順</th><th></th></tr>
+            </thead>
+            <tbody id="deptRows"></tbody>
+          </table>
+        </div>
+        <div class="msg err hidden" id="deptMsg"></div>
+        <div class="note">
+          <strong>表示アプリ</strong>は、ポータルの所属選択でこの職場を選んだときに表示されるアプリです。ユーザー登録時のアカウント発行もこの設定に基づきます（図面管理はアカウント不要のため発行対象外）。
+        </div>
+      </div>
+
+      <!-- ② ユーザー設定 -->
+      <div id="tab-users" class="tabsec hidden">
+        <div class="card">
+          <h2>ユーザーを1名追加</h2>
+          <div class="row2">
+            <div>
+              <label class="f">社員番号（必須・半角英数と - _ @ . ）</label>
+              <input type="text" id="ufLogin" placeholder="例: 12345" />
+            </div>
+            <div>
+              <label class="f">ユーザー名（必須）</label>
+              <input type="text" id="ufName" placeholder="例: 山田 太郎" />
+            </div>
+          </div>
+          <div class="row2">
+            <div>
+              <label class="f">職場</label>
+              <select id="ufDept"></select>
+            </div>
+            <div>
+              <label class="f">メール（任意）</label>
+              <input type="email" id="ufEmail" placeholder="例: taro@example.com" />
+            </div>
+          </div>
+          <button class="primary" id="ufAdd" type="button">追加してアカウント発行</button>
+          <div class="msg hidden" id="ufMsg"></div>
+          <div id="ufResult" class="hidden" style="margin-top:12px"></div>
+        </div>
+
+        <div class="tblwrap">
+          <table class="tbl">
+            <thead>
+              <tr><th>社員番号</th><th>ユーザー名</th><th>職場コード</th><th>職場名</th><th>メール</th><th>発行状況</th><th></th></tr>
+            </thead>
+            <tbody id="userRows"></tbody>
+          </table>
+        </div>
+        <div class="msg err hidden" id="usersMsg"></div>
+        <div class="note">
+          発行状況: <span class="badge b-created">発行済</span>=新規発行 / <span class="badge b-exists">既存</span>=アプリ側に登録済み / <span class="badge b-error">エラー</span>=発行失敗（アプリ側未対応・通信エラー等）。<br />
+          <strong>名簿から削除しても、各アプリ側のアカウントは削除されません。</strong>アプリ側のアカウント削除は各アプリの管理機能で行ってください。
+        </div>
+      </div>
+
+      <!-- ③ CSV一括登録 -->
+      <div id="tab-csv" class="tabsec hidden">
+        <div class="card">
+          <h2>CSVファイルから一括登録</h2>
+          <p style="font-size:12px;color:var(--sub);line-height:1.9">
+            1行目はヘッダー <b>社員番号,ユーザー名,職場コード,職場名,メール</b>（職場名・メールは任意）。文字コードは UTF-8 / Shift_JIS のどちらでも読み込めます。<br />
+            職場は<b>職場コード優先</b>で照合し、コードが空欄の行は職場名で照合します。登録済みの社員番号はスキップされます。
+            <a href="#" class="plain" id="csvTemplate">テンプレートCSVをダウンロード</a>
+          </p>
+          <label class="f">CSVファイル</label>
+          <input type="file" id="csvFile" class="filebox" accept=".csv,text/csv" />
+          <div class="msg err hidden" id="csvMsg"></div>
+        </div>
+
+        <div class="card hidden" id="csvPreviewCard">
+          <h2>プレビュー（<span id="csvCount">0</span>行）</h2>
+          <div class="tblwrap">
+            <table class="tbl">
+              <thead>
+                <tr><th>#</th><th>社員番号</th><th>ユーザー名</th><th>職場コード</th><th>職場名</th><th>メール</th><th>チェック</th></tr>
+              </thead>
+              <tbody id="csvPreviewRows"></tbody>
+            </table>
+          </div>
+          <button class="primary" id="csvRun" type="button">登録実行</button>
+          <div class="msg hidden" id="csvProgress"></div>
+        </div>
+
+        <div class="card hidden" id="csvResultCard">
+          <h2>登録結果</h2>
+          <div class="tblwrap">
+            <table class="tbl">
+              <thead>
+                <tr><th>社員番号</th><th>ユーザー名</th><th>結果</th><th>アプリ発行状況・パスワード設定リンク</th></tr>
+              </thead>
+              <tbody id="csvResultRows"></tbody>
+            </table>
+          </div>
+          <button class="ghost" id="csvDownloadLinks" type="button">リンク一覧をCSVダウンロード</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="site"><span class="c">株式会社パロマ 生産・調達統括本部</span></footer>
+
+  <script>
+    // ===== アプリ定義（ポータルの index.html と同じキー） =====
+    const APPS = {
+      keikaku:  { name: "生産計画" },
+      nippou:   { name: "生産日報" },
+      sekisai:  { name: "出荷積載" },
+      zumen:    { name: "図面管理" },
+      keisoku:  { name: "計測機器" },
+      setsubi:  { name: "設備管理" },
+      hinshitsu:{ name: "品質管理" },
+      zaiko:    { name: "在庫管理" },
+      kanagata: { name: "型管理" },
+      hoju:     { name: "補充計画" },
+      tenchu:   { name: "転注管理" },
+    };
+    const APP_KEYS = Object.keys(APPS);
+    const STATUS_LABEL = { created: "発行済", exists: "既存", error: "エラー", duplicate: "重複" };
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+    let departments = [];
+    let users = [];
+
+    // ===== API =====
+    async function api(path, opts = {}) {
+      const r = await fetch(path, {
+        headers: { "Content-Type": "application/json" },
+        ...opts,
+      });
+      let data = null;
+      try { data = await r.json(); } catch { data = null; }
+      if (r.status === 401) { showLogin(); throw new Error((data && data.message) || "ログインが必要です"); }
+      if (!r.ok) throw new Error((data && data.message) || ("エラーが発生しました (" + r.status + ")"));
+      return data;
+    }
+
+    // ===== 表示切替 =====
+    function showLogin() {
+      $("adminView").classList.add("hidden");
+      $("loginView").classList.remove("hidden");
+    }
+    function showAdmin() {
+      $("loginView").classList.add("hidden");
+      $("adminView").classList.remove("hidden");
+    }
+
+    async function init() {
+      try {
+        await api("/api/admin-session");
+        showAdmin();
+        await reloadAll();
+      } catch {
+        showLogin();
+      }
+    }
+
+    async function reloadAll() {
+      await Promise.all([loadDepartments(), loadUsers()]);
+    }
+
+    // ===== ログイン =====
+    $("loginBtn").addEventListener("click", doLogin);
+    $("loginPw").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
+    async function doLogin() {
+      const m = $("loginMsg");
+      m.classList.add("hidden");
+      $("loginBtn").disabled = true;
+      try {
+        await api("/api/admin-login", { method: "POST", body: JSON.stringify({ password: $("loginPw").value }) });
+        $("loginPw").value = "";
+        showAdmin();
+        await reloadAll();
+      } catch (e) {
+        m.textContent = e.message;
+        m.classList.remove("hidden");
+      } finally {
+        $("loginBtn").disabled = false;
+      }
+    }
+    $("logoutBtn").addEventListener("click", async () => {
+      try { await fetch("/api/admin-login", { method: "DELETE" }); } catch {}
+      showLogin();
+    });
+
+    // ===== タブ =====
+    document.querySelectorAll(".tabs button[data-tab]").forEach((b) => {
+      if (!b.dataset.tab) return;
+      b.addEventListener("click", () => {
+        document.querySelectorAll(".tabs button[data-tab]").forEach((x) => x.classList.remove("on"));
+        b.classList.add("on");
+        ["depts", "users", "csv"].forEach((t) => $("tab-" + t).classList.toggle("hidden", t !== b.dataset.tab));
+      });
+    });
+
+    // ===== ① 部署設定 =====
+    let editingDeptId = null;
+
+    function renderAppChecks(selected) {
+      const box = $("dfApps");
+      box.replaceChildren(...APP_KEYS.map((k) => {
+        const label = document.createElement("label");
+        const cb = document.createElement("input");
+        cb.type = "checkbox"; cb.value = k; cb.checked = selected.includes(k);
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(APPS[k].name));
+        return label;
+      }));
+    }
+
+    function openDeptForm(dept) {
+      editingDeptId = dept ? dept.id : null;
+      $("deptFormTitle").textContent = dept ? "職場を編集" : "職場を追加";
+      $("dfCode").value = dept ? (dept.code || "") : "";
+      $("dfKind").value = dept ? (dept.kind || "dept") : "dept";
+      $("dfName").value = dept ? dept.name : "";
+      $("dfDesc").value = dept ? (dept.description || "") : "";
+      $("dfSort").value = dept ? dept.sort : (departments.length ? Math.max(...departments.map((d) => d.sort || 0)) + 1 : 1);
+      renderAppChecks(dept && Array.isArray(dept.apps) ? dept.apps : []);
+      $("dfMsg").classList.add("hidden");
+      $("deptFormCard").classList.remove("hidden");
+      $("dfCode").focus();
+    }
+    $("deptAddBtn").addEventListener("click", () => openDeptForm(null));
+    $("dfCancel").addEventListener("click", () => { $("deptFormCard").classList.add("hidden"); editingDeptId = null; });
+
+    $("dfSave").addEventListener("click", async () => {
+      const msg = $("dfMsg");
+      msg.classList.add("hidden");
+      const payload = {
+        code: $("dfCode").value.trim(),
+        kind: $("dfKind").value,
+        name: $("dfName").value.trim(),
+        description: $("dfDesc").value.trim(),
+        sort: Number($("dfSort").value || 0),
+        apps: [...$("dfApps").querySelectorAll("input:checked")].map((c) => c.value),
+      };
+      if (!payload.code) { msg.textContent = "職場コードを入力してください"; msg.classList.remove("hidden"); return; }
+      if (!/^[A-Za-z0-9_-]+$/.test(payload.code)) { msg.textContent = "職場コードは半角英数で入力してください"; msg.classList.remove("hidden"); return; }
+      if (!payload.name) { msg.textContent = "職場名を入力してください"; msg.classList.remove("hidden"); return; }
+      $("dfSave").disabled = true;
+      try {
+        if (editingDeptId) {
+          await api("/api/departments", { method: "PUT", body: JSON.stringify({ id: editingDeptId, ...payload }) });
+        } else {
+          await api("/api/departments", { method: "POST", body: JSON.stringify(payload) });
+        }
+        $("deptFormCard").classList.add("hidden");
+        editingDeptId = null;
+        await reloadAll();
+      } catch (e) {
+        msg.textContent = e.message;
+        msg.classList.remove("hidden");
+      } finally {
+        $("dfSave").disabled = false;
+      }
+    });
+
+    async function loadDepartments() {
+      const rows = await api("/api/departments");
+      departments = Array.isArray(rows) ? rows : [];
+      renderDeptTable();
+      renderUserDeptSelect();
+    }
+
+    function renderDeptTable() {
+      const tbody = $("deptRows");
+      tbody.replaceChildren(...departments.map((d) => {
+        const tr = document.createElement("tr");
+        const apps = (Array.isArray(d.apps) ? d.apps : []).filter((k) => APPS[k]);
+        tr.innerHTML =
+          "<td><b>" + esc(d.code || "—") + "</b></td>" +
+          "<td>" + (d.kind === "factory" ? "工場" : "部署") + "</td>" +
+          "<td><b>" + esc(d.name) + "</b></td>" +
+          "<td class=\"sub\">" + esc(d.description || "") + "</td>" +
+          "<td>" + (apps.length ? apps.map((k) => '<span class="chip">' + esc(APPS[k].name) + "</span>").join("") : '<span class="sub">なし</span>') + "</td>" +
+          "<td>" + esc(d.sort) + "</td>" +
+          "<td style=\"white-space:nowrap\"></td>";
+        const cell = tr.lastElementChild;
+        const be = document.createElement("button");
+        be.className = "mini"; be.type = "button"; be.textContent = "編集";
+        be.addEventListener("click", () => openDeptForm(d));
+        const bd = document.createElement("button");
+        bd.className = "mini danger"; bd.type = "button"; bd.textContent = "削除";
+        bd.style.marginLeft = "6px";
+        bd.addEventListener("click", async () => {
+          if (!confirm("「" + d.name + "」を削除しますか？\n所属していたユーザーの職場は未設定になります。")) return;
+          const msg = $("deptMsg");
+          msg.classList.add("hidden");
+          try {
+            await api("/api/departments", { method: "DELETE", body: JSON.stringify({ id: d.id }) });
+            await reloadAll();
+          } catch (e) {
+            msg.textContent = e.message;
+            msg.classList.remove("hidden");
+          }
+        });
+        cell.appendChild(be);
+        cell.appendChild(bd);
+        return tr;
+      }));
+    }
+
+    // ===== ② ユーザー設定 =====
+    function renderUserDeptSelect() {
+      const sel = $("ufDept");
+      sel.replaceChildren(...departments.map((d) => {
+        const o = document.createElement("option");
+        o.value = d.id;
+        o.textContent = (d.code ? d.code + " " : "") + d.name;
+        return o;
+      }));
+    }
+
+    async function loadUsers() {
+      users = await api("/api/users");
+      renderUserTable();
+    }
+
+    function provisionBadges(provisions) {
+      if (!provisions || provisions.length === 0) return '<span class="sub">—</span>';
+      return provisions.map((p) => {
+        const label = (APPS[p.app] ? APPS[p.app].name : p.app) + ": " + (STATUS_LABEL[p.status] || p.status);
+        return '<span class="badge b-' + esc(p.status) + '">' + esc(label) + "</span>";
+      }).join("");
+    }
+
+    function linksBox(provisions) {
+      const box = document.createElement("div");
+      box.className = "linksbox";
+      const withInfo = (provisions || []);
+      if (withInfo.length === 0) {
+        box.innerHTML = '<div class="lrow"><span class="sub">発行情報はありません</span></div>';
+        return box;
+      }
+      for (const p of withInfo) {
+        const row = document.createElement("div");
+        row.className = "lrow";
+        const an = document.createElement("span");
+        an.className = "an";
+        an.textContent = APPS[p.app] ? APPS[p.app].name : p.app;
+        row.appendChild(an);
+        const st = document.createElement("span");
+        st.className = "badge b-" + p.status;
+        st.textContent = STATUS_LABEL[p.status] || p.status;
+        row.appendChild(st);
+        const url = document.createElement("span");
+        url.className = "url";
+        url.textContent = p.inviteUrl || "（パスワード設定リンクなし）";
+        row.appendChild(url);
+        if (p.inviteUrl) {
+          const bc = document.createElement("button");
+          bc.className = "mini"; bc.type = "button"; bc.textContent = "コピー";
+          bc.addEventListener("click", () => copyText(p.inviteUrl, bc));
+          row.appendChild(bc);
+        }
+        box.appendChild(row);
+      }
+      return box;
+    }
+
+    async function copyText(text, btn) {
+      try {
+        await navigator.clipboard.writeText(text);
+        const t = btn.textContent;
+        btn.textContent = "コピー済";
+        setTimeout(() => { btn.textContent = t; }, 1200);
+      } catch {
+        prompt("以下をコピーしてください", text);
+      }
+    }
+
+    function renderUserTable() {
+      const tbody = $("userRows");
+      if (!Array.isArray(users) || users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="sub">ユーザーはまだ登録されていません</td></tr>';
+        return;
+      }
+      const rows = [];
+      for (const u of users) {
+        const tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td><b>" + esc(u.loginId) + "</b></td>" +
+          "<td>" + esc(u.name) + "</td>" +
+          "<td>" + esc(u.departmentCode || "—") + "</td>" +
+          "<td>" + esc(u.departmentName || "未設定") + "</td>" +
+          "<td class=\"sub\">" + esc(u.email || "") + "</td>" +
+          "<td>" + provisionBadges(u.provisions) + "</td>" +
+          "<td style=\"white-space:nowrap\"></td>";
+        const cell = tr.lastElementChild;
+
+        const bl = document.createElement("button");
+        bl.className = "mini"; bl.type = "button"; bl.textContent = "発行リンク表示";
+        const bd = document.createElement("button");
+        bd.className = "mini danger"; bd.type = "button"; bd.textContent = "削除";
+        bd.style.marginLeft = "6px";
+        cell.appendChild(bl);
+        cell.appendChild(bd);
+
+        const linksTr = document.createElement("tr");
+        linksTr.className = "hidden";
+        const linksTd = document.createElement("td");
+        linksTd.colSpan = 7;
+        linksTd.appendChild(linksBox(u.provisions));
+        linksTr.appendChild(linksTd);
+
+        bl.addEventListener("click", () => {
+          const hidden = linksTr.classList.toggle("hidden");
+          bl.textContent = hidden ? "発行リンク表示" : "発行リンクを隠す";
+        });
+        bd.addEventListener("click", async () => {
+          if (!confirm("「" + u.name + "（" + u.loginId + "）」を名簿から削除しますか？\n※各アプリ側のアカウントは削除されません。")) return;
+          const msg = $("usersMsg");
+          msg.classList.add("hidden");
+          try {
+            await api("/api/users", { method: "DELETE", body: JSON.stringify({ id: u.id }) });
+            await loadUsers();
+          } catch (e) {
+            msg.textContent = e.message;
+            msg.classList.remove("hidden");
+          }
+        });
+
+        rows.push(tr, linksTr);
+      }
+      tbody.replaceChildren(...rows);
+    }
+
+    $("ufAdd").addEventListener("click", async () => {
+      const msg = $("ufMsg");
+      const resBox = $("ufResult");
+      msg.classList.add("hidden");
+      resBox.classList.add("hidden");
+      const payload = {
+        loginId: $("ufLogin").value.trim(),
+        name: $("ufName").value.trim(),
+        email: $("ufEmail").value.trim(),
+        departmentId: $("ufDept").value,
+      };
+      if (!payload.loginId || !payload.name) {
+        msg.textContent = "社員番号とユーザー名を入力してください";
+        msg.className = "msg err";
+        msg.classList.remove("hidden");
+        return;
+      }
+      $("ufAdd").disabled = true;
+      try {
+        const r = await api("/api/users", { method: "POST", body: JSON.stringify(payload) });
+        msg.textContent = "「" + r.user.name + "」を登録しました。アカウント発行結果:";
+        msg.className = "msg ok";
+        msg.classList.remove("hidden");
+        resBox.replaceChildren(linksBox(r.apps));
+        resBox.classList.remove("hidden");
+        $("ufLogin").value = ""; $("ufName").value = ""; $("ufEmail").value = "";
+        await loadUsers();
+      } catch (e) {
+        msg.textContent = e.message;
+        msg.className = "msg err";
+        msg.classList.remove("hidden");
+      } finally {
+        $("ufAdd").disabled = false;
+      }
+    });
+
+    // ===== ③ CSV一括登録 =====
+    const CSV_HEADER = ["社員番号", "ユーザー名", "職場コード", "職場名", "メール"];
+    let csvRows = []; // [{loginId,name,departmentCode,departmentName,email}]
+    let csvResults = []; // 結果（rows + apps）
+
+    $("csvTemplate").addEventListener("click", (e) => {
+      e.preventDefault();
+      downloadCsv("portal-users-template.csv", [
+        CSV_HEADER,
+        ["1001", "山田 太郎", "D001", "生産管理部", "taro@example.com"],
+        ["1002", "鈴木 花子", "D003", "", ""],
+      ]);
+    });
+
+    function downloadCsv(filename, rows) {
+      const csv = rows.map((r) => r.map((c) => '"' + String(c == null ? "" : c).replace(/"/g, '""') + '"').join(",")).join("\r\n");
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    }
+
+    // UTF-8 / Shift_JIS 両対応デコード（�が多ければ shift_jis で再デコード）
+    async function decodeCsvFile(file) {
+      const buf = await file.arrayBuffer();
+      const utf8 = new TextDecoder("utf-8").decode(buf);
+      const bad = (utf8.match(/�/g) || []).length;
+      if (bad > 0) {
+        try {
+          const sjis = new TextDecoder("shift_jis").decode(buf);
+          const badSjis = (sjis.match(/�/g) || []).length;
+          if (badSjis < bad) return sjis;
+        } catch {}
+      }
+      return utf8;
+    }
+
+    // カンマ区切り・ダブルクォート対応の CSV パーサ
+    function parseCsv(text) {
+      const rows = [];
+      let row = [], cur = "", inQ = false;
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (inQ) {
+          if (c === '"') {
+            if (text[i + 1] === '"') { cur += '"'; i++; }
+            else inQ = false;
+          } else cur += c;
+        } else if (c === '"') {
+          inQ = true;
+        } else if (c === ",") {
+          row.push(cur); cur = "";
+        } else if (c === "\n") {
+          row.push(cur); rows.push(row); row = []; cur = "";
+        } else if (c === "\r") {
+          // skip
+        } else {
+          cur += c;
+        }
+      }
+      if (cur !== "" || row.length > 0) { row.push(cur); rows.push(row); }
+      return rows.filter((r) => r.some((c) => String(c).trim() !== ""));
+    }
+
+    function toObjects(rows) {
+      if (rows.length === 0) return [];
+      let idx = { loginId: 0, name: 1, code: 2, deptName: 3, email: 4 };
+      let start = 0;
+      const head = rows[0].map((c) => String(c).trim());
+      if (head.some((h) => h.includes("社員番号"))) {
+        start = 1;
+        const find = (...keys) => head.findIndex((h) => keys.some((k) => h === k || h.includes(k)));
+        const iLogin = find("社員番号");
+        const iName = head.findIndex((h) => h === "ユーザー名" || h === "氏名" || (h.includes("ユーザー") && h.includes("名")));
+        const iCode = find("職場コード", "部署コード");
+        const iDept = head.findIndex((h) => (h === "職場名" || h === "職場" || h === "部署名" || h === "部署") && h !== "職場コード");
+        const iMail = find("メール", "mail", "email");
+        idx = {
+          loginId: iLogin >= 0 ? iLogin : 0,
+          name: iName >= 0 ? iName : 1,
+          code: iCode >= 0 ? iCode : 2,
+          deptName: iDept >= 0 ? iDept : 3,
+          email: iMail >= 0 ? iMail : 4,
+        };
+      }
+      const out = [];
+      for (let i = start; i < rows.length; i++) {
+        const r = rows[i];
+        out.push({
+          loginId: String(r[idx.loginId] || "").trim(),
+          name: String(r[idx.name] || "").trim(),
+          departmentCode: String(r[idx.code] || "").trim(),
+          departmentName: String(r[idx.deptName] || "").trim(),
+          email: String(r[idx.email] || "").trim(),
+        });
+      }
+      return out;
+    }
+
+    // 行のクライアント側チェック（サーバー側でも検証される）
+    function precheckRow(r, seen) {
+      if (!r.loginId) return { ok: false, note: "社員番号が空です" };
+      if (!/^[A-Za-z0-9_@.-]+$/.test(r.loginId)) return { ok: false, note: "社員番号に使えない文字があります" };
+      if (!r.name) return { ok: false, note: "ユーザー名が空です" };
+      const dept = r.departmentCode
+        ? departments.find((d) => String(d.code || "") === r.departmentCode)
+        : r.departmentName
+          ? departments.find((d) => d.name === r.departmentName)
+          : null;
+      if (!dept) return { ok: false, note: "職場が見つかりません" };
+      if (seen.has(r.loginId)) return { ok: false, note: "ファイル内で社員番号が重複しています" };
+      seen.add(r.loginId);
+      return { ok: true, note: "OK（" + (dept.code ? dept.code + " " : "") + dept.name + "）" };
+    }
+
+    $("csvFile").addEventListener("change", async () => {
+      const msg = $("csvMsg");
+      msg.classList.add("hidden");
+      $("csvPreviewCard").classList.add("hidden");
+      $("csvResultCard").classList.add("hidden");
+      const file = $("csvFile").files && $("csvFile").files[0];
+      if (!file) return;
+      try {
+        const text = await decodeCsvFile(file);
+        csvRows = toObjects(parseCsv(text));
+        if (csvRows.length === 0) {
+          msg.textContent = "CSVにデータ行がありません";
+          msg.classList.remove("hidden");
+          return;
+        }
+        $("csvCount").textContent = String(csvRows.length);
+        const seen = new Set();
+        $("csvPreviewRows").replaceChildren(...csvRows.map((r, i) => {
+          const chk = precheckRow(r, seen);
+          const tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td class=\"sub\">" + (i + 1) + "</td>" +
+            "<td><b>" + esc(r.loginId) + "</b></td>" +
+            "<td>" + esc(r.name) + "</td>" +
+            "<td>" + esc(r.departmentCode) + "</td>" +
+            "<td>" + esc(r.departmentName) + "</td>" +
+            "<td class=\"sub\">" + esc(r.email) + "</td>" +
+            "<td>" + (chk.ok ? '<span class="badge b-created">' + esc(chk.note) + "</span>" : '<span class="badge b-error">' + esc(chk.note) + "</span>") + "</td>";
+          return tr;
+        }));
+        $("csvPreviewCard").classList.remove("hidden");
+      } catch (e) {
+        msg.textContent = "CSVの読み込みに失敗しました: " + e.message;
+        msg.classList.remove("hidden");
+      }
+    });
+
+    $("csvRun").addEventListener("click", async () => {
+      if (csvRows.length === 0) return;
+      const prog = $("csvProgress");
+      prog.className = "msg";
+      prog.classList.remove("hidden");
+      $("csvRun").disabled = true;
+      csvResults = [];
+      const CHUNK = 200;
+      try {
+        for (let i = 0; i < csvRows.length; i += CHUNK) {
+          prog.textContent = "登録中… " + Math.min(i + CHUNK, csvRows.length) + " / " + csvRows.length + " 行";
+          const part = csvRows.slice(i, i + CHUNK);
+          const r = await api("/api/users-import", { method: "POST", body: JSON.stringify({ rows: part }) });
+          csvResults.push(...(r.rows || []));
+        }
+        prog.textContent = "完了: " + csvResults.length + " 行を処理しました";
+        prog.className = "msg ok";
+        renderCsvResults();
+        await loadUsers();
+      } catch (e) {
+        prog.textContent = "エラー: " + e.message + (csvResults.length ? "（" + csvResults.length + "行までは処理済み）" : "");
+        prog.className = "msg err";
+        if (csvResults.length) renderCsvResults();
+      } finally {
+        $("csvRun").disabled = false;
+      }
+    });
+
+    function renderCsvResults() {
+      $("csvResultRows").replaceChildren(...csvResults.map((r) => {
+        const tr = document.createElement("tr");
+        const rowStatus = r.status === "created"
+          ? '<span class="badge b-created">登録</span>'
+          : r.status === "duplicate"
+            ? '<span class="badge b-duplicate">スキップ（重複）</span>'
+            : '<span class="badge b-error">エラー</span>';
+        tr.innerHTML =
+          "<td><b>" + esc(r.loginId) + "</b></td>" +
+          "<td>" + esc(r.name) + "</td>" +
+          "<td>" + rowStatus + (r.message ? '<div class="sub">' + esc(r.message) + "</div>" : "") + "</td>" +
+          "<td></td>";
+        const cell = tr.lastElementChild;
+        if (Array.isArray(r.apps) && r.apps.length > 0) {
+          cell.appendChild(linksBox(r.apps));
+        } else {
+          cell.innerHTML = '<span class="sub">—</span>';
+        }
+        return tr;
+      }));
+      $("csvResultCard").classList.remove("hidden");
+    }
+
+    $("csvDownloadLinks").addEventListener("click", () => {
+      const rows = [["社員番号", "ユーザー名", "アプリ", "状態", "パスワード設定リンク"]];
+      for (const r of csvResults) {
+        if (Array.isArray(r.apps) && r.apps.length > 0) {
+          for (const a of r.apps) {
+            rows.push([r.loginId, r.name, APPS[a.app] ? APPS[a.app].name : a.app, STATUS_LABEL[a.status] || a.status, a.inviteUrl || ""]);
+          }
+        } else {
+          rows.push([r.loginId, r.name, "", STATUS_LABEL[r.status] || r.status, ""]);
+        }
+      }
+      downloadCsv("portal-invite-links.csv", rows);
+    });
+
+    init();
+  </script>
+</body>
+</html>

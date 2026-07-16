@@ -1,0 +1,11 @@
+{
+  "name": "pf-portal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "株式会社パロマ 生産・調達統括本部 ポータル（静的サイト + Vercel Serverless Functions + Neon）",
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.1",
+    "@vercel/edge": "^1.2.2",
+    "bcryptjs": "^3.0.2"
+  }
+}
