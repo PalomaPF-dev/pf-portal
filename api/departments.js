@@ -4,7 +4,7 @@
 // PUT    管理者: 更新 {id, code?,kind?,name?,description?,apps?,sort?}
 // DELETE 管理者: 削除 {id}（所属ユーザーの department_id は SET NULL）
 const { requireSql, ensureSchema, readBody, isUuid, ALL_APP_KEYS } = require("../lib/db");
-const { requireAdmin } = require("../lib/portalAuth");
+const { requireManage } = require("../lib/portalAuth");
 
 const CODE_RE = /^[A-Za-z0-9_-]+$/;
 
@@ -32,7 +32,7 @@ module.exports = async (req, res) => {
     }
 
     // 以降は管理者のみ
-    if (!requireAdmin(req, res)) return;
+    if (!requireManage(req, res)) return;
 
     if (req.method === "POST") {
       const body = readBody(req);

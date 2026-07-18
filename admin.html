@@ -122,6 +122,9 @@
     .b-duplicate { background: #fff3e0; color: #b26a00; }
     .b-plain   { background: var(--soft); color: var(--sub); }
     .b-admin   { background: #fdecea; color: var(--red); }
+    .b-manage  { background: #e3f2fd; color: #0b5ca8; }
+
+    .help { font-size: 11px; color: var(--sub); margin-top: 4px; line-height: 1.6; }
 
     .chip {
       display: inline-block; font-size: 10.5px; border: 1px solid var(--line);
@@ -179,11 +182,12 @@
     <section id="loginView" class="hidden">
       <div class="lead">
         <h1>管理者ログイン</h1>
-        <p>ポータルの職場設定・ユーザー管理を行います。管理者パスワードを入力してください。</p>
+        <p>ポータルの職場設定・ユーザー管理を行います。マスターパスワード、またはポータル管理権限が付与されたユーザーの社員番号と管理用パスワードでログインしてください。</p>
       </div>
       <div class="card" style="max-width:420px">
-        <label class="f">管理者ID</label>
-        <input type="text" value="admin" disabled />
+        <label class="f">社員番号（ポータル管理権限のユーザーのみ）</label>
+        <input type="text" id="loginId" autocomplete="username" placeholder="例: 12345" />
+        <div class="help">空欄の場合はマスターパスワードでログイン</div>
         <label class="f">パスワード</label>
         <input type="password" id="loginPw" autocomplete="current-password" />
         <button class="primary" id="loginBtn" type="button">ログイン</button>
@@ -337,6 +341,21 @@
             </div>
             <div></div>
           </div>
+          <!-- ポータル管理権限（マスターログイン時・編集時のみ表示） -->
+          <div id="ufManageWrap" class="hidden">
+            <div class="row2">
+              <div>
+                <label class="f" style="display:flex;align-items:center;gap:7px;cursor:pointer">
+                  <input type="checkbox" id="ufCanManage" style="width:auto;accent-color:var(--red)" />
+                  ポータル管理権限（部署・ユーザー設定が可能）
+                </label>
+              </div>
+              <div>
+                <label class="f">管理用パスワード（8文字以上・変更時のみ入力）</label>
+                <input type="password" id="ufManagePw" autocomplete="new-password" />
+              </div>
+            </div>
+          </div>
           <button class="primary" id="ufAdd" type="button">追加してアカウント発行</button>
           <button class="ghost hidden" id="ufCancel" type="button">編集をキャンセル</button>
           <div class="msg hidden" id="ufMsg"></div>
@@ -353,7 +372,7 @@
         </div>
         <div class="msg err hidden" id="usersMsg"></div>
         <div class="note">
-          発行状況: <span class="badge b-created">発行済</span>=新規発行 / <span class="badge b-exists">既存</span>=アプリ側に登録済み / <span class="badge b-error">エラー</span>=発行失敗（アプリ側未対応・通信エラー等）。<br />
+          発行状況（パスワード設定状況）: <span class="badge b-created">設定済み</span>=パスワード設定済み / <span class="badge b-exists">未設定</span>=パスワード未設定 / <span class="badge b-plain">不明</span>=アプリから未取得（「状況更新」で再取得） / <span class="badge b-error">エラー</span>=連携失敗（アプリ側未対応・通信エラー等）。<br />
           承認者を指定しない一般ユーザーは、所属する職場の管理者が承認者になります。<br />
           <strong>名簿から削除しても、各アプリ側のアカウントは削除されません。</strong>アプリ側のアカウント削除は各アプリの管理機能で行ってください。
         </div>
@@ -402,12 +421,12 @@
           <div class="tblwrap">
             <table class="tbl">
               <thead>
-                <tr><th>社員番号</th><th>ユーザー名</th><th>結果</th><th>アプリ発行状況・パスワード設定リンク</th></tr>
+                <tr><th>社員番号</th><th>ユーザー名</th><th>結果</th><th>アプリ発行状況・パスワード設定状況</th></tr>
               </thead>
               <tbody id="csvResultRows"></tbody>
             </table>
           </div>
-          <button class="ghost" id="csvDownloadLinks" type="button">リンク一覧をCSVダウンロード</button>
+          <button class="ghost" id="csvDownloadLinks" type="button">発行結果をCSVダウンロード</button>
         </div>
       </div>
     </section>
@@ -441,6 +460,8 @@
     let departments = [];
     let workplaces = [];
     let users = [];
+    // 現在のセッション種別: 'master'（マスターパスワード） | 'manager'（ポータル管理権限ユーザー）
+    let sessionKind = "master";
 
     // 管理者権限のユーザー（承認者・職場管理者の選択肢）
     function adminUsers() {
@@ -472,7 +493,8 @@
 
     async function init() {
       try {
-        await api("/api/admin-session");
+        const s = await api("/api/admin-session");
+        sessionKind = (s && s.kind) || "master";
         showAdmin();
         await reloadAll();
       } catch {
@@ -494,14 +516,20 @@
     }
 
     // ===== ログイン =====
+    // 社員番号が空欄ならマスターパスワード、入力があればポータル管理権限ユーザーとしてログイン
     $("loginBtn").addEventListener("click", doLogin);
+    $("loginId").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
     $("loginPw").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
     async function doLogin() {
       const m = $("loginMsg");
       m.classList.add("hidden");
       $("loginBtn").disabled = true;
       try {
-        await api("/api/admin-login", { method: "POST", body: JSON.stringify({ password: $("loginPw").value }) });
+        const r = await api("/api/admin-login", {
+          method: "POST",
+          body: JSON.stringify({ password: $("loginPw").value, loginId: $("loginId").value.trim() }),
+        });
+        sessionKind = (r && r.kind) || "master";
         $("loginPw").value = "";
         showAdmin();
         await reloadAll();
@@ -665,7 +693,12 @@
         chip.style.cssText = "background:#fff;display:inline-flex;align-items:center;gap:6px;padding:4px 8px;";
         const t = document.createElement("span");
         t.style.color = "var(--ink)";
-        t.textContent = (w.code ? w.code + " " : "") + w.name + (w.adminName ? "（管理者: " + w.adminName + "）" : "");
+        // 職場コードは部署コードの下の階層として「部署コード › 職場コード 名前」で表示
+        t.textContent =
+          (dept.code ? dept.code + " › " : "") +
+          (w.code ? w.code + " " : "") +
+          w.name +
+          (w.adminName ? "（管理者: " + w.adminName + "）" : "");
         chip.appendChild(t);
         const be = document.createElement("button");
         be.className = "mini"; be.type = "button"; be.textContent = "編集";
@@ -722,7 +755,11 @@
     function openWorkplaceForm(dept, wp) {
       editingWorkplaceId = wp ? wp.id : null;
       workplaceDeptId = dept.id;
-      $("wpFormTitle").textContent = (wp ? "職場を編集" : "職場を追加") + "（" + dept.name + "）";
+      // フォーム見出しにも「部署コード › 職場コード」の階層を表示
+      const deptLabel = (dept.code ? dept.code + " " : "") + dept.name;
+      $("wpFormTitle").textContent = wp
+        ? "職場を編集（" + deptLabel + " › " + (wp.code ? wp.code + " " : "") + wp.name + "）"
+        : "職場を追加（" + deptLabel + "）";
       $("wfCode").value = wp ? (wp.code || "") : "";
       $("wfName").value = wp ? wp.name : "";
       const siblings = workplaces.filter((w) => w.departmentId === dept.id);
@@ -834,15 +871,26 @@
       users = Array.isArray(rows) ? rows : [];
     }
 
+    // パスワード設定状況のバッジ（発行状況はこれのみ表示・リンク表示は廃止）
+    // error → エラー / passwordSet true → 設定済み / false → 未設定 / null → 不明
+    function pwBadge(p) {
+      if (p.status === "error") return { cls: "b-error", label: "エラー" };
+      if (p.passwordSet === true) return { cls: "b-created", label: "設定済み" };
+      if (p.passwordSet === false) return { cls: "b-exists", label: "未設定" };
+      return { cls: "b-plain", label: "不明" };
+    }
+
     function provisionBadges(provisions) {
       if (!provisions || provisions.length === 0) return '<span class="sub">—</span>';
       return provisions.map((p) => {
-        const label = (APPS[p.app] ? APPS[p.app].name : p.app) + ": " + (STATUS_LABEL[p.status] || p.status);
-        return '<span class="badge b-' + esc(p.status) + '">' + esc(label) + "</span>";
+        const b = pwBadge(p);
+        const label = (APPS[p.app] ? APPS[p.app].name : p.app) + ": " + b.label;
+        return '<span class="badge ' + b.cls + '">' + esc(label) + "</span>";
       }).join("");
     }
 
-    function linksBox(provisions) {
+    // アプリごとのパスワード設定状況一覧（追加・更新結果／CSV結果に表示）
+    function statusBox(provisions) {
       const box = document.createElement("div");
       box.className = "linksbox";
       const withInfo = (provisions || []);
@@ -857,34 +905,14 @@
         an.className = "an";
         an.textContent = APPS[p.app] ? APPS[p.app].name : p.app;
         row.appendChild(an);
+        const b = pwBadge(p);
         const st = document.createElement("span");
-        st.className = "badge b-" + p.status;
-        st.textContent = STATUS_LABEL[p.status] || p.status;
+        st.className = "badge " + b.cls;
+        st.textContent = b.label;
         row.appendChild(st);
-        const url = document.createElement("span");
-        url.className = "url";
-        url.textContent = p.inviteUrl || "（パスワード設定リンクなし）";
-        row.appendChild(url);
-        if (p.inviteUrl) {
-          const bc = document.createElement("button");
-          bc.className = "mini"; bc.type = "button"; bc.textContent = "コピー";
-          bc.addEventListener("click", () => copyText(p.inviteUrl, bc));
-          row.appendChild(bc);
-        }
         box.appendChild(row);
       }
       return box;
-    }
-
-    async function copyText(text, btn) {
-      try {
-        await navigator.clipboard.writeText(text);
-        const t = btn.textContent;
-        btn.textContent = "コピー済";
-        setTimeout(() => { btn.textContent = t; }, 1200);
-      } catch {
-        prompt("以下をコピーしてください", text);
-      }
     }
 
     // 承認者セル: 本人指定 → 職場の管理者（既定） → 未設定
@@ -905,15 +933,21 @@
       const rows = [];
       for (const u of users) {
         const tr = document.createElement("tr");
-        const roleBadge = u.role === "admin"
+        const roleBadge = (u.role === "admin"
           ? '<span class="badge b-admin">管理者</span>'
-          : '<span class="badge b-plain">一般</span>';
+          : '<span class="badge b-plain">一般</span>')
+          + (u.canManage ? '<span class="badge b-manage">ポータル管理</span>' : "");
+        // 職場は「部署コード › 職場コード」の階層で表示（名前はサブ行・tooltip）
+        const wpHier = u.workplaceId
+          ? esc((u.departmentCode ? u.departmentCode + " › " : "") + (u.workplaceCode || u.workplaceName || "")) +
+            (u.workplaceCode && u.workplaceName ? '<div class="sub">' + esc(u.workplaceName) + "</div>" : "")
+          : '<span class="sub">—</span>';
         tr.innerHTML =
           "<td><b>" + esc(u.loginId) + "</b></td>" +
           "<td>" + esc(u.name) + "</td>" +
           "<td>" + roleBadge + "</td>" +
           "<td>" + esc((u.departmentCode ? u.departmentCode + " " : "") + (u.departmentName || "未設定")) + "</td>" +
-          "<td>" + esc(u.workplaceName || "—") + "</td>" +
+          "<td title=\"" + esc(u.workplaceName || "") + "\">" + wpHier + "</td>" +
           "<td>" + approverCellHtml(u) + "</td>" +
           "<td class=\"sub\">" + esc(u.email || "") + "</td>" +
           "<td>" + provisionBadges(u.provisions) + "</td>" +
@@ -923,26 +957,32 @@
         const be = document.createElement("button");
         be.className = "mini"; be.type = "button"; be.textContent = "編集";
         be.addEventListener("click", () => startEditUser(u));
-        const bl = document.createElement("button");
-        bl.className = "mini"; bl.type = "button"; bl.textContent = "発行リンク表示";
-        bl.style.marginLeft = "6px";
+        const br = document.createElement("button");
+        br.className = "mini"; br.type = "button"; br.textContent = "状況更新";
+        br.style.marginLeft = "6px";
         const bd = document.createElement("button");
         bd.className = "mini danger"; bd.type = "button"; bd.textContent = "削除";
         bd.style.marginLeft = "6px";
         cell.appendChild(be);
-        cell.appendChild(bl);
+        cell.appendChild(br);
         cell.appendChild(bd);
 
-        const linksTr = document.createElement("tr");
-        linksTr.className = "hidden";
-        const linksTd = document.createElement("td");
-        linksTd.colSpan = 9;
-        linksTd.appendChild(linksBox(u.provisions));
-        linksTr.appendChild(linksTd);
-
-        bl.addEventListener("click", () => {
-          const hidden = linksTr.classList.toggle("hidden");
-          bl.textContent = hidden ? "発行リンク表示" : "発行リンクを隠す";
+        // 状況更新: 再プロビジョニングして最新の発行状況（パスワード設定状況）を取得
+        br.addEventListener("click", async () => {
+          const msg = $("usersMsg");
+          msg.classList.add("hidden");
+          br.disabled = true;
+          br.textContent = "更新中…";
+          try {
+            const r = await api("/api/users-refresh", { method: "POST", body: JSON.stringify({ id: u.id }) });
+            u.provisions = r && Array.isArray(r.apps) ? r.apps : [];
+            renderUserTable();
+          } catch (e) {
+            msg.textContent = e.message;
+            msg.classList.remove("hidden");
+            br.disabled = false;
+            br.textContent = "状況更新";
+          }
         });
         bd.addEventListener("click", async () => {
           if (!confirm("「" + u.name + "（" + u.loginId + "）」を名簿から削除しますか？\n※各アプリ側のアカウントは削除されません。")) return;
@@ -958,7 +998,7 @@
           }
         });
 
-        rows.push(tr, linksTr);
+        rows.push(tr);
       }
       tbody.replaceChildren(...rows);
     }
@@ -976,6 +1016,10 @@
       $("ufRole").value = u.role === "admin" ? "admin" : "member";
       $("ufApproverWrap").classList.toggle("hidden", u.role === "admin");
       renderApproverSelect(u.approverUserId || "");
+      // ポータル管理権限の付与 UI はマスターセッションのみ表示（サーバー側でも強制）
+      $("ufManageWrap").classList.toggle("hidden", sessionKind !== "master");
+      $("ufCanManage").checked = u.canManage === true;
+      $("ufManagePw").value = "";
       $("ufAdd").textContent = "更新して再発行";
       $("ufCancel").classList.remove("hidden");
       $("ufMsg").classList.add("hidden");
@@ -994,6 +1038,9 @@
       $("ufRole").value = "member";
       $("ufApproverWrap").classList.remove("hidden");
       renderApproverSelect("");
+      $("ufManageWrap").classList.add("hidden");
+      $("ufCanManage").checked = false;
+      $("ufManagePw").value = "";
       $("ufAdd").textContent = "追加してアカウント発行";
       $("ufCancel").classList.add("hidden");
       $("ufMsg").classList.add("hidden");
@@ -1022,6 +1069,20 @@
         msg.classList.remove("hidden");
         return;
       }
+      // ポータル管理権限（編集時・マスターセッションのみ送信）
+      if (editingUserId && sessionKind === "master") {
+        payload.canManage = $("ufCanManage").checked;
+        const managePw = $("ufManagePw").value;
+        if (managePw) {
+          if (managePw.length < 8) {
+            msg.textContent = "管理用パスワードは8文字以上で入力してください";
+            msg.className = "msg err";
+            msg.classList.remove("hidden");
+            return;
+          }
+          payload.managePassword = managePw;
+        }
+      }
       $("ufAdd").disabled = true;
       try {
         let r;
@@ -1038,7 +1099,7 @@
         msg.textContent = okText;
         msg.className = "msg ok";
         msg.classList.remove("hidden");
-        resBox.replaceChildren(linksBox(r.apps));
+        resBox.replaceChildren(statusBox(r.apps));
         resBox.classList.remove("hidden");
         await reloadAll();
       } catch (e) {
@@ -1288,7 +1349,7 @@
           "<td></td>";
         const cell = tr.lastElementChild;
         if (Array.isArray(r.apps) && r.apps.length > 0) {
-          cell.appendChild(linksBox(r.apps));
+          cell.appendChild(statusBox(r.apps));
         } else {
           cell.innerHTML = '<span class="sub">—</span>';
         }
@@ -1298,17 +1359,17 @@
     }
 
     $("csvDownloadLinks").addEventListener("click", () => {
-      const rows = [["社員番号", "ユーザー名", "アプリ", "状態", "パスワード設定リンク"]];
+      const rows = [["社員番号", "ユーザー名", "アプリ", "状態", "パスワード設定"]];
       for (const r of csvResults) {
         if (Array.isArray(r.apps) && r.apps.length > 0) {
           for (const a of r.apps) {
-            rows.push([r.loginId, r.name, APPS[a.app] ? APPS[a.app].name : a.app, STATUS_LABEL[a.status] || a.status, a.inviteUrl || ""]);
+            rows.push([r.loginId, r.name, APPS[a.app] ? APPS[a.app].name : a.app, STATUS_LABEL[a.status] || a.status, pwBadge(a).label]);
           }
         } else {
           rows.push([r.loginId, r.name, "", STATUS_LABEL[r.status] || r.status, ""]);
         }
       }
-      downloadCsv("portal-invite-links.csv", rows);
+      downloadCsv("portal-provision-status.csv", rows);
     });
 
     init();
