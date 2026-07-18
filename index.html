@@ -102,28 +102,36 @@
     .tile .go { margin-left: auto; color: var(--line); font-size: 14px; flex-shrink: 0; }
     a.tile:hover .go { color: var(--red); }
 
-    .approvals {
-      margin-bottom: 14px; background: #fff; border: 1px solid var(--red);
-      border-radius: 12px; padding: 12px 14px;
-    }
-    .approvals .ahead {
-      display: flex; align-items: center; gap: 7px;
-      font-size: 12.5px; font-weight: 700; color: var(--red); margin-bottom: 9px;
-    }
-    .approvals .ahead .badge {
+    /* 承認待ちバッジ（各アプリカード上） */
+    a.tile { position: relative; }
+    a.tile.haspend { border-color: var(--red); }
+    .tile .pbadge {
+      position: absolute; top: -8px; right: 10px;
       background: var(--red); color: #fff; border-radius: 999px;
-      font-size: 11px; padding: 1px 8px; font-weight: 700;
+      font-size: 10px; padding: 2px 8px; font-weight: 700; white-space: nowrap;
+      line-height: 1.5;
     }
-    .approvals .arow { display: flex; flex-wrap: wrap; gap: 8px; }
-    .approvals a.achip {
-      display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
-      border: 1px solid var(--line); border-radius: 10px; padding: 7px 11px; color: inherit;
-      transition: border-color .12s ease;
+
+    /* 表示設定（カード / リスト切替） */
+    .viewset {
+      display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+      margin-bottom: 12px;
     }
-    .approvals a.achip:hover { border-color: var(--red); }
-    .approvals a.achip img { width: 22px; height: 22px; border-radius: 6px; }
-    .approvals a.achip .an { font-size: 12.5px; font-weight: 700; }
-    .approvals a.achip .ac { font-size: 12px; color: var(--red); font-weight: 700; }
+    .viewset .vlabel { font-size: 10.5px; color: var(--sub); letter-spacing: .05em; }
+    .vtoggle { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+    .vtoggle button {
+      background: #fff; border: none; font-family: inherit; cursor: pointer;
+      font-size: 11px; color: var(--sub); padding: 5px 12px;
+    }
+    .vtoggle button + button { border-left: 1px solid var(--line); }
+    .vtoggle button.von { background: var(--red); color: #fff; font-weight: 700; }
+
+    /* リスト表示（1列コンパクト） */
+    .grid.vlist { grid-template-columns: 1fr; gap: 8px; }
+    .grid.vlist a.tile { padding: 8px 12px; }
+    .grid.vlist .tile img { width: 36px; height: 36px; border-radius: 8px; }
+    .grid.vlist .tile .t { flex: 1; min-width: 0; }
+    .grid.vlist .tile .desc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .note {
       margin-top: 18px; background: var(--soft); border: 1px solid var(--line);
       border-radius: 12px; padding: 14px 16px;
@@ -176,7 +184,13 @@
         <button id="changeAff" type="button">変更</button>
       </div>
       <main class="apps">
-        <div id="approvalBanner" class="approvals hidden"></div>
+        <div class="viewset">
+          <span class="vlabel">表示設定</span>
+          <div class="vtoggle" role="group" aria-label="表示設定">
+            <button type="button" id="viewCard">カード</button>
+            <button type="button" id="viewList">リスト</button>
+          </div>
+        </div>
         <div class="grid" id="appGrid"></div>
         <div class="note">
           <strong>はじめての方へ</strong><br />
@@ -274,7 +288,7 @@
       const tiles = aff.apps.map((k) => {
         const a = APPS[k];
         const el = document.createElement("a");
-        el.className = "tile"; el.href = a.url;
+        el.className = "tile"; el.href = a.url; el.dataset.app = k;
         el.innerHTML =
           '<img src="/icons/' + k + '.png" alt="" />' +
           '<span class="t"><span class="name">' + a.name + '</span><span class="desc">' + a.desc + '</span></span>' +
@@ -282,37 +296,50 @@
         return el;
       });
       $("appGrid").replaceChildren(...tiles);
+      applyView(currentView());
       loadApprovals(aff);
     }
 
-    // アプリ横断の「承認待ち」バナー。所属に含まれるアプリの pending を表示。
+    // ===== 表示設定（カード / リスト） =====
+    const VIEW_KEY = "pf_portal_view";
+    function currentView() {
+      const v = localStorage.getItem(VIEW_KEY);
+      if (v === "card" || v === "list") return v;
+      // 未設定時は画面幅で既定を決める（700px以下はリスト）
+      return window.matchMedia("(max-width: 700px)").matches ? "list" : "card";
+    }
+    function applyView(v) {
+      $("appGrid").classList.toggle("vlist", v === "list");
+      $("viewCard").classList.toggle("von", v === "card");
+      $("viewList").classList.toggle("von", v === "list");
+    }
+    $("viewCard").addEventListener("click", () => { localStorage.setItem(VIEW_KEY, "card"); applyView("card"); });
+    $("viewList").addEventListener("click", () => { localStorage.setItem(VIEW_KEY, "list"); applyView("list"); });
+
+    // 各アプリカード上に「承認待ち」バッジを表示。取得失敗時は何もしない。
     function loadApprovals(aff) {
-      const banner = $("approvalBanner");
       const allow = new Set(aff.apps || []);
       fetch("/api/approvals")
         .then((r) => (r.ok ? r.json() : { apps: [] }))
         .then((d) => {
-          const list = (d.apps || []).filter((a) => allow.has(a.app) && a.pending > 0);
-          if (list.length === 0) { banner.classList.add("hidden"); banner.replaceChildren(); return; }
-          const total = list.reduce((n, a) => n + a.pending, 0);
-          const head = document.createElement("div");
-          head.className = "ahead";
-          head.innerHTML = '承認待ちの申請があります <span class="badge">' + total + '</span>';
-          const row = document.createElement("div");
-          row.className = "arow";
-          list.forEach((a) => {
-            const el = document.createElement("a");
-            el.className = "achip"; el.href = a.url + "/approvals";
-            el.innerHTML =
-              '<img src="/icons/' + a.app + '.png" alt="" />' +
-              '<span class="an">' + (APPS[a.app] ? APPS[a.app].name : a.name) + '</span>' +
-              '<span class="ac">' + a.pending + '件</span>';
-            row.appendChild(el);
+          const pend = {};
+          (d.apps || []).forEach((a) => { if (allow.has(a.app) && a.pending > 0) pend[a.app] = a.pending; });
+          document.querySelectorAll("#appGrid a.tile").forEach((el) => {
+            const old = el.querySelector(".pbadge");
+            if (old) old.remove();
+            const n = pend[el.dataset.app];
+            if (n) {
+              el.classList.add("haspend");
+              const b = document.createElement("span");
+              b.className = "pbadge";
+              b.textContent = "承認待ち " + n + "件";
+              el.appendChild(b);
+            } else {
+              el.classList.remove("haspend");
+            }
           });
-          banner.replaceChildren(head, row);
-          banner.classList.remove("hidden");
         })
-        .catch(() => { banner.classList.add("hidden"); });
+        .catch(() => {});
     }
 
     function findAff(saved) {
