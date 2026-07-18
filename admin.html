@@ -121,6 +121,7 @@
     .b-error   { background: #fdecea; color: var(--red); }
     .b-duplicate { background: #fff3e0; color: #b26a00; }
     .b-plain   { background: var(--soft); color: var(--sub); }
+    .b-admin   { background: #fdecea; color: var(--red); }
 
     .chip {
       display: inline-block; font-size: 10.5px; border: 1px solid var(--line);
@@ -209,14 +210,14 @@
       <div id="tab-depts" class="tabsec">
         <div class="toolbar">
           <div class="sp"></div>
-          <button class="ghost" id="deptAddBtn" type="button" style="margin-top:0">＋ 職場を追加</button>
+          <button class="ghost" id="deptAddBtn" type="button" style="margin-top:0">＋ 部署を追加</button>
         </div>
 
         <div class="card hidden" id="deptFormCard">
-          <h2 id="deptFormTitle">職場を追加</h2>
+          <h2 id="deptFormTitle">部署を追加</h2>
           <div class="row2">
             <div>
-              <label class="f">職場コード（必須・半角英数）</label>
+              <label class="f">部署コード（必須・半角英数）</label>
               <input type="text" id="dfCode" placeholder="例: D001" />
             </div>
             <div>
@@ -229,7 +230,7 @@
           </div>
           <div class="row2">
             <div>
-              <label class="f">職場名（必須）</label>
+              <label class="f">部署名（必須）</label>
               <input type="text" id="dfName" placeholder="例: 生産管理部" />
             </div>
             <div>
@@ -248,24 +249,54 @@
           <div class="msg err hidden" id="dfMsg"></div>
         </div>
 
+        <div class="card hidden" id="wpFormCard">
+          <h2 id="wpFormTitle">職場を追加</h2>
+          <div class="row2">
+            <div>
+              <label class="f">職場コード（必須・半角英数）</label>
+              <input type="text" id="wfCode" placeholder="例: W001" />
+            </div>
+            <div>
+              <label class="f">職場名（必須）</label>
+              <input type="text" id="wfName" placeholder="例: 組立第一課" />
+            </div>
+          </div>
+          <div class="row2">
+            <div>
+              <label class="f">管理者（任意・管理者権限のユーザー）</label>
+              <select id="wfAdmin"></select>
+            </div>
+            <div>
+              <label class="f">表示順（小さいほど上に表示）</label>
+              <input type="number" id="wfSort" value="0" />
+            </div>
+          </div>
+          <div>
+            <button class="primary" id="wfSave" type="button">保存</button>
+            <button class="ghost" id="wfCancel" type="button">キャンセル</button>
+          </div>
+          <div class="msg err hidden" id="wfMsg"></div>
+        </div>
+
         <div class="tblwrap">
           <table class="tbl">
             <thead>
-              <tr><th>職場コード</th><th>種別</th><th>職場名</th><th>説明</th><th>表示アプリ</th><th>並び順</th><th></th></tr>
+              <tr><th>部署コード</th><th>種別</th><th>部署名</th><th>説明</th><th>表示アプリ</th><th>並び順</th><th></th></tr>
             </thead>
             <tbody id="deptRows"></tbody>
           </table>
         </div>
         <div class="msg err hidden" id="deptMsg"></div>
         <div class="note">
-          <strong>表示アプリ</strong>は、ポータルの所属選択でこの職場を選んだときに表示されるアプリです。ユーザー登録時のアカウント発行もこの設定に基づきます（図面管理はアカウント不要のため発行対象外）。
+          <strong>表示アプリ</strong>は、ポータルの所属選択でこの部署を選んだときに表示されるアプリです。ユーザー登録時のアカウント発行もこの設定に基づきます（図面管理はアカウント不要のため発行対象外）。<br />
+          各部署の行の下に<strong>職場</strong>（部署配下の単位）を登録できます。職場に管理者を設定すると、その職場の一般ユーザーの承認者（既定）になります。
         </div>
       </div>
 
       <!-- ② ユーザー設定 -->
       <div id="tab-users" class="tabsec hidden">
         <div class="card">
-          <h2>ユーザーを1名追加</h2>
+          <h2 id="ufFormTitle">ユーザーを1名追加</h2>
           <div class="row2">
             <div>
               <label class="f">社員番号（必須・半角英数と - _ @ . ）</label>
@@ -278,15 +309,36 @@
           </div>
           <div class="row2">
             <div>
-              <label class="f">職場</label>
+              <label class="f">部署</label>
               <select id="ufDept"></select>
             </div>
+            <div>
+              <label class="f">職場（任意）</label>
+              <select id="ufWorkplace"></select>
+            </div>
+          </div>
+          <div class="row2">
+            <div>
+              <label class="f">権限</label>
+              <select id="ufRole">
+                <option value="member">一般</option>
+                <option value="admin">管理者</option>
+              </select>
+            </div>
+            <div id="ufApproverWrap">
+              <label class="f">承認者（任意・一般ユーザーのみ）</label>
+              <select id="ufApprover"></select>
+            </div>
+          </div>
+          <div class="row2">
             <div>
               <label class="f">メール（任意）</label>
               <input type="email" id="ufEmail" placeholder="例: taro@example.com" />
             </div>
+            <div></div>
           </div>
           <button class="primary" id="ufAdd" type="button">追加してアカウント発行</button>
+          <button class="ghost hidden" id="ufCancel" type="button">編集をキャンセル</button>
           <div class="msg hidden" id="ufMsg"></div>
           <div id="ufResult" class="hidden" style="margin-top:12px"></div>
         </div>
@@ -294,7 +346,7 @@
         <div class="tblwrap">
           <table class="tbl">
             <thead>
-              <tr><th>社員番号</th><th>ユーザー名</th><th>職場コード</th><th>職場名</th><th>メール</th><th>発行状況</th><th></th></tr>
+              <tr><th>社員番号</th><th>ユーザー名</th><th>権限</th><th>部署</th><th>職場</th><th>承認者</th><th>メール</th><th>発行状況</th><th></th></tr>
             </thead>
             <tbody id="userRows"></tbody>
           </table>
@@ -302,7 +354,18 @@
         <div class="msg err hidden" id="usersMsg"></div>
         <div class="note">
           発行状況: <span class="badge b-created">発行済</span>=新規発行 / <span class="badge b-exists">既存</span>=アプリ側に登録済み / <span class="badge b-error">エラー</span>=発行失敗（アプリ側未対応・通信エラー等）。<br />
+          承認者を指定しない一般ユーザーは、所属する職場の管理者が承認者になります。<br />
           <strong>名簿から削除しても、各アプリ側のアカウントは削除されません。</strong>アプリ側のアカウント削除は各アプリの管理機能で行ってください。
+        </div>
+
+        <div class="card">
+          <h2>滞留中の申請リセット</h2>
+          <p style="font-size:12px;color:var(--sub);line-height:1.9">
+            各アプリ（品質管理・設備管理・転注管理・型管理）で承認待ちのまま滞留している申請を一括でリセットします。承認者の変更後などに使用してください。
+          </p>
+          <button class="ghost" id="approvalsResetBtn" type="button">滞留中の申請を全てリセット</button>
+          <div class="msg hidden" id="approvalsResetMsg"></div>
+          <div id="approvalsResetResult" class="hidden" style="margin-top:10px"></div>
         </div>
       </div>
 
@@ -311,8 +374,8 @@
         <div class="card">
           <h2>CSVファイルから一括登録</h2>
           <p style="font-size:12px;color:var(--sub);line-height:1.9">
-            1行目はヘッダー <b>社員番号,ユーザー名,職場コード,職場名,メール</b>（職場名・メールは任意）。文字コードは UTF-8 / Shift_JIS のどちらでも読み込めます。<br />
-            職場は<b>職場コード優先</b>で照合し、コードが空欄の行は職場名で照合します。登録済みの社員番号はスキップされます。
+            1行目はヘッダー <b>社員番号,ユーザー名,部署コード,部署名,メール</b>（部署名・メールは任意）。文字コードは UTF-8 / Shift_JIS のどちらでも読み込めます。<br />
+            部署は<b>部署コード優先</b>で照合し、コードが空欄の行は部署名で照合します。登録済みの社員番号はスキップされます。権限は「一般」、職場・承認者は未設定で登録されます（登録後にユーザー設定の編集で変更できます）。
             <a href="#" class="plain" id="csvTemplate">テンプレートCSVをダウンロード</a>
           </p>
           <label class="f">CSVファイル</label>
@@ -325,7 +388,7 @@
           <div class="tblwrap">
             <table class="tbl">
               <thead>
-                <tr><th>#</th><th>社員番号</th><th>ユーザー名</th><th>職場コード</th><th>職場名</th><th>メール</th><th>チェック</th></tr>
+                <tr><th>#</th><th>社員番号</th><th>ユーザー名</th><th>部署コード</th><th>部署名</th><th>メール</th><th>チェック</th></tr>
               </thead>
               <tbody id="csvPreviewRows"></tbody>
             </table>
@@ -376,7 +439,13 @@
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
     let departments = [];
+    let workplaces = [];
     let users = [];
+
+    // 管理者権限のユーザー（承認者・職場管理者の選択肢）
+    function adminUsers() {
+      return users.filter((u) => u.role === "admin");
+    }
 
     // ===== API =====
     async function api(path, opts = {}) {
@@ -412,7 +481,16 @@
     }
 
     async function reloadAll() {
-      await Promise.all([loadDepartments(), loadUsers()]);
+      await Promise.all([loadDepartments(), loadWorkplaces(), loadUsers()]);
+      renderAll();
+    }
+
+    function renderAll() {
+      renderDeptTable();
+      renderUserDeptSelect();
+      renderUserWorkplaceSelect();
+      renderApproverSelect();
+      renderUserTable();
     }
 
     // ===== ログイン =====
@@ -466,7 +544,7 @@
 
     function openDeptForm(dept) {
       editingDeptId = dept ? dept.id : null;
-      $("deptFormTitle").textContent = dept ? "職場を編集" : "職場を追加";
+      $("deptFormTitle").textContent = dept ? "部署を編集" : "部署を追加";
       $("dfCode").value = dept ? (dept.code || "") : "";
       $("dfKind").value = dept ? (dept.kind || "dept") : "dept";
       $("dfName").value = dept ? dept.name : "";
@@ -491,9 +569,9 @@
         sort: Number($("dfSort").value || 0),
         apps: [...$("dfApps").querySelectorAll("input:checked")].map((c) => c.value),
       };
-      if (!payload.code) { msg.textContent = "職場コードを入力してください"; msg.classList.remove("hidden"); return; }
-      if (!/^[A-Za-z0-9_-]+$/.test(payload.code)) { msg.textContent = "職場コードは半角英数で入力してください"; msg.classList.remove("hidden"); return; }
-      if (!payload.name) { msg.textContent = "職場名を入力してください"; msg.classList.remove("hidden"); return; }
+      if (!payload.code) { msg.textContent = "部署コードを入力してください"; msg.classList.remove("hidden"); return; }
+      if (!/^[A-Za-z0-9_-]+$/.test(payload.code)) { msg.textContent = "部署コードは半角英数で入力してください"; msg.classList.remove("hidden"); return; }
+      if (!payload.name) { msg.textContent = "部署名を入力してください"; msg.classList.remove("hidden"); return; }
       $("dfSave").disabled = true;
       try {
         if (editingDeptId) {
@@ -515,13 +593,17 @@
     async function loadDepartments() {
       const rows = await api("/api/departments");
       departments = Array.isArray(rows) ? rows : [];
-      renderDeptTable();
-      renderUserDeptSelect();
+    }
+
+    async function loadWorkplaces() {
+      const rows = await api("/api/workplaces");
+      workplaces = Array.isArray(rows) ? rows : [];
     }
 
     function renderDeptTable() {
       const tbody = $("deptRows");
-      tbody.replaceChildren(...departments.map((d) => {
+      const rows = [];
+      for (const d of departments) {
         const tr = document.createElement("tr");
         const apps = (Array.isArray(d.apps) ? d.apps : []).filter((k) => APPS[k]);
         tr.innerHTML =
@@ -540,7 +622,7 @@
         bd.className = "mini danger"; bd.type = "button"; bd.textContent = "削除";
         bd.style.marginLeft = "6px";
         bd.addEventListener("click", async () => {
-          if (!confirm("「" + d.name + "」を削除しますか？\n所属していたユーザーの職場は未設定になります。")) return;
+          if (!confirm("「" + d.name + "」を削除しますか？\n配下の職場も削除され、所属していたユーザーの部署は未設定になります。")) return;
           const msg = $("deptMsg");
           msg.classList.add("hidden");
           try {
@@ -553,24 +635,203 @@
         });
         cell.appendChild(be);
         cell.appendChild(bd);
-        return tr;
-      }));
+        rows.push(tr, renderWorkplaceSubRow(d));
+      }
+      tbody.replaceChildren(...rows);
     }
 
+    // 部署行の直下に、その部署の職場一覧を表示するサブ行
+    function renderWorkplaceSubRow(dept) {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 7;
+      td.style.background = "var(--soft)";
+      const box = document.createElement("div");
+      box.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;align-items:center;";
+      const lbl = document.createElement("span");
+      lbl.className = "sub";
+      lbl.textContent = "職場:";
+      box.appendChild(lbl);
+      const wps = workplaces.filter((w) => w.departmentId === dept.id);
+      if (wps.length === 0) {
+        const none = document.createElement("span");
+        none.className = "sub";
+        none.textContent = "（未登録）";
+        box.appendChild(none);
+      }
+      for (const w of wps) {
+        const chip = document.createElement("span");
+        chip.className = "chip";
+        chip.style.cssText = "background:#fff;display:inline-flex;align-items:center;gap:6px;padding:4px 8px;";
+        const t = document.createElement("span");
+        t.style.color = "var(--ink)";
+        t.textContent = (w.code ? w.code + " " : "") + w.name + (w.adminName ? "（管理者: " + w.adminName + "）" : "");
+        chip.appendChild(t);
+        const be = document.createElement("button");
+        be.className = "mini"; be.type = "button"; be.textContent = "編集";
+        be.style.cssText = "padding:1px 6px;font-size:10.5px;";
+        be.addEventListener("click", () => openWorkplaceForm(dept, w));
+        chip.appendChild(be);
+        const bd = document.createElement("button");
+        bd.className = "mini danger"; bd.type = "button"; bd.textContent = "削除";
+        bd.style.cssText = "padding:1px 6px;font-size:10.5px;";
+        bd.addEventListener("click", async () => {
+          if (!confirm("職場「" + w.name + "」を削除しますか？\n所属していたユーザーの職場は未設定になります。")) return;
+          const msg = $("deptMsg");
+          msg.classList.add("hidden");
+          try {
+            await api("/api/workplaces", { method: "DELETE", body: JSON.stringify({ id: w.id }) });
+            await reloadAll();
+          } catch (e) {
+            msg.textContent = e.message;
+            msg.classList.remove("hidden");
+          }
+        });
+        chip.appendChild(bd);
+        box.appendChild(chip);
+      }
+      const badd = document.createElement("button");
+      badd.className = "mini"; badd.type = "button"; badd.textContent = "＋職場を追加";
+      badd.addEventListener("click", () => openWorkplaceForm(dept, null));
+      box.appendChild(badd);
+      td.appendChild(box);
+      tr.appendChild(td);
+      return tr;
+    }
+
+    // ===== ①-2 職場（部署配下）フォーム =====
+    let editingWorkplaceId = null;
+    let workplaceDeptId = null;
+
+    function renderWpAdminSelect(selectedId) {
+      const sel = $("wfAdmin");
+      const o0 = document.createElement("option");
+      o0.value = "";
+      o0.textContent = "（未設定）";
+      const opts = [o0];
+      for (const u of adminUsers()) {
+        const o = document.createElement("option");
+        o.value = u.id;
+        o.textContent = u.name + "（" + u.loginId + "）";
+        opts.push(o);
+      }
+      sel.replaceChildren(...opts);
+      sel.value = selectedId && [...sel.options].some((o) => o.value === selectedId) ? selectedId : "";
+    }
+
+    function openWorkplaceForm(dept, wp) {
+      editingWorkplaceId = wp ? wp.id : null;
+      workplaceDeptId = dept.id;
+      $("wpFormTitle").textContent = (wp ? "職場を編集" : "職場を追加") + "（" + dept.name + "）";
+      $("wfCode").value = wp ? (wp.code || "") : "";
+      $("wfName").value = wp ? wp.name : "";
+      const siblings = workplaces.filter((w) => w.departmentId === dept.id);
+      $("wfSort").value = wp ? wp.sort : siblings.reduce((m, w) => Math.max(m, w.sort || 0), 0) + 1;
+      renderWpAdminSelect(wp ? (wp.adminUserId || "") : "");
+      $("wfMsg").classList.add("hidden");
+      $("deptFormCard").classList.add("hidden");
+      $("wpFormCard").classList.remove("hidden");
+      $("wfCode").focus();
+    }
+    $("wfCancel").addEventListener("click", () => {
+      $("wpFormCard").classList.add("hidden");
+      editingWorkplaceId = null;
+      workplaceDeptId = null;
+    });
+
+    $("wfSave").addEventListener("click", async () => {
+      const msg = $("wfMsg");
+      msg.classList.add("hidden");
+      const payload = {
+        departmentId: workplaceDeptId,
+        code: $("wfCode").value.trim(),
+        name: $("wfName").value.trim(),
+        adminUserId: $("wfAdmin").value || null,
+        sort: Number($("wfSort").value || 0),
+      };
+      if (!payload.code) { msg.textContent = "職場コードを入力してください"; msg.classList.remove("hidden"); return; }
+      if (!/^[A-Za-z0-9_-]+$/.test(payload.code)) { msg.textContent = "職場コードは半角英数で入力してください"; msg.classList.remove("hidden"); return; }
+      if (!payload.name) { msg.textContent = "職場名を入力してください"; msg.classList.remove("hidden"); return; }
+      $("wfSave").disabled = true;
+      try {
+        if (editingWorkplaceId) {
+          await api("/api/workplaces", { method: "PUT", body: JSON.stringify({ id: editingWorkplaceId, ...payload }) });
+        } else {
+          await api("/api/workplaces", { method: "POST", body: JSON.stringify(payload) });
+        }
+        $("wpFormCard").classList.add("hidden");
+        editingWorkplaceId = null;
+        workplaceDeptId = null;
+        await reloadAll();
+      } catch (e) {
+        msg.textContent = e.message;
+        msg.classList.remove("hidden");
+      } finally {
+        $("wfSave").disabled = false;
+      }
+    });
+
     // ===== ② ユーザー設定 =====
+    let editingUserId = null;
+
     function renderUserDeptSelect() {
       const sel = $("ufDept");
+      const keep = sel.value;
       sel.replaceChildren(...departments.map((d) => {
         const o = document.createElement("option");
         o.value = d.id;
         o.textContent = (d.code ? d.code + " " : "") + d.name;
         return o;
       }));
+      if (keep && [...sel.options].some((o) => o.value === keep)) sel.value = keep;
     }
 
+    // 選択中の部署に属する職場だけを選択肢にする
+    function renderUserWorkplaceSelect(selectedId) {
+      const sel = $("ufWorkplace");
+      const keep = selectedId !== undefined ? selectedId : sel.value;
+      const deptId = $("ufDept").value;
+      const o0 = document.createElement("option");
+      o0.value = "";
+      o0.textContent = "（未設定）";
+      const opts = [o0];
+      for (const w of workplaces.filter((w) => w.departmentId === deptId)) {
+        const o = document.createElement("option");
+        o.value = w.id;
+        o.textContent = (w.code ? w.code + " " : "") + w.name;
+        opts.push(o);
+      }
+      sel.replaceChildren(...opts);
+      sel.value = keep && [...sel.options].some((o) => o.value === keep) ? keep : "";
+    }
+
+    // 承認者の選択肢（管理者権限のユーザーのみ・編集中の本人は除外）
+    function renderApproverSelect(selectedId) {
+      const sel = $("ufApprover");
+      const keep = selectedId !== undefined ? selectedId : sel.value;
+      const o0 = document.createElement("option");
+      o0.value = "";
+      o0.textContent = "職場の管理者に従う";
+      const opts = [o0];
+      for (const u of adminUsers()) {
+        if (editingUserId && u.id === editingUserId) continue; // 自分自身は承認者にできない
+        const o = document.createElement("option");
+        o.value = u.id;
+        o.textContent = u.name + "（" + u.loginId + "）";
+        opts.push(o);
+      }
+      sel.replaceChildren(...opts);
+      sel.value = keep && [...sel.options].some((o) => o.value === keep) ? keep : "";
+    }
+
+    $("ufDept").addEventListener("change", () => renderUserWorkplaceSelect(""));
+    $("ufRole").addEventListener("change", () => {
+      $("ufApproverWrap").classList.toggle("hidden", $("ufRole").value === "admin");
+    });
+
     async function loadUsers() {
-      users = await api("/api/users");
-      renderUserTable();
+      const rows = await api("/api/users");
+      users = Array.isArray(rows) ? rows : [];
     }
 
     function provisionBadges(provisions) {
@@ -626,37 +887,56 @@
       }
     }
 
+    // 承認者セル: 本人指定 → 職場の管理者（既定） → 未設定
+    function approverCellHtml(u) {
+      if (u.role === "admin") return '<span class="sub">—</span>';
+      if (u.approverName) return esc(u.approverName);
+      const w = u.workplaceId ? workplaces.find((x) => x.id === u.workplaceId) : null;
+      if (w && w.adminName) return esc(w.adminName) + ' <span class="sub">（職場管理者）</span>';
+      return '<span class="sub">未設定</span>';
+    }
+
     function renderUserTable() {
       const tbody = $("userRows");
       if (!Array.isArray(users) || users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="sub">ユーザーはまだ登録されていません</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="sub">ユーザーはまだ登録されていません</td></tr>';
         return;
       }
       const rows = [];
       for (const u of users) {
         const tr = document.createElement("tr");
+        const roleBadge = u.role === "admin"
+          ? '<span class="badge b-admin">管理者</span>'
+          : '<span class="badge b-plain">一般</span>';
         tr.innerHTML =
           "<td><b>" + esc(u.loginId) + "</b></td>" +
           "<td>" + esc(u.name) + "</td>" +
-          "<td>" + esc(u.departmentCode || "—") + "</td>" +
-          "<td>" + esc(u.departmentName || "未設定") + "</td>" +
+          "<td>" + roleBadge + "</td>" +
+          "<td>" + esc((u.departmentCode ? u.departmentCode + " " : "") + (u.departmentName || "未設定")) + "</td>" +
+          "<td>" + esc(u.workplaceName || "—") + "</td>" +
+          "<td>" + approverCellHtml(u) + "</td>" +
           "<td class=\"sub\">" + esc(u.email || "") + "</td>" +
           "<td>" + provisionBadges(u.provisions) + "</td>" +
           "<td style=\"white-space:nowrap\"></td>";
         const cell = tr.lastElementChild;
 
+        const be = document.createElement("button");
+        be.className = "mini"; be.type = "button"; be.textContent = "編集";
+        be.addEventListener("click", () => startEditUser(u));
         const bl = document.createElement("button");
         bl.className = "mini"; bl.type = "button"; bl.textContent = "発行リンク表示";
+        bl.style.marginLeft = "6px";
         const bd = document.createElement("button");
         bd.className = "mini danger"; bd.type = "button"; bd.textContent = "削除";
         bd.style.marginLeft = "6px";
+        cell.appendChild(be);
         cell.appendChild(bl);
         cell.appendChild(bd);
 
         const linksTr = document.createElement("tr");
         linksTr.className = "hidden";
         const linksTd = document.createElement("td");
-        linksTd.colSpan = 7;
+        linksTd.colSpan = 9;
         linksTd.appendChild(linksBox(u.provisions));
         linksTr.appendChild(linksTd);
 
@@ -670,7 +950,8 @@
           msg.classList.add("hidden");
           try {
             await api("/api/users", { method: "DELETE", body: JSON.stringify({ id: u.id }) });
-            await loadUsers();
+            if (editingUserId === u.id) cancelEditUser();
+            await reloadAll();
           } catch (e) {
             msg.textContent = e.message;
             msg.classList.remove("hidden");
@@ -682,18 +963,60 @@
       tbody.replaceChildren(...rows);
     }
 
+    // 編集モード: フォームに既存値を入れて PUT（社員番号は変更不可）
+    function startEditUser(u) {
+      editingUserId = u.id;
+      $("ufFormTitle").textContent = "ユーザーを編集（" + u.loginId + "）";
+      $("ufLogin").value = u.loginId;
+      $("ufLogin").disabled = true;
+      $("ufName").value = u.name;
+      $("ufEmail").value = u.email || "";
+      if (u.departmentId) $("ufDept").value = u.departmentId;
+      renderUserWorkplaceSelect(u.workplaceId || "");
+      $("ufRole").value = u.role === "admin" ? "admin" : "member";
+      $("ufApproverWrap").classList.toggle("hidden", u.role === "admin");
+      renderApproverSelect(u.approverUserId || "");
+      $("ufAdd").textContent = "更新して再発行";
+      $("ufCancel").classList.remove("hidden");
+      $("ufMsg").classList.add("hidden");
+      $("ufResult").classList.add("hidden");
+      $("ufFormTitle").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function cancelEditUser() {
+      editingUserId = null;
+      $("ufFormTitle").textContent = "ユーザーを1名追加";
+      $("ufLogin").value = "";
+      $("ufLogin").disabled = false;
+      $("ufName").value = "";
+      $("ufEmail").value = "";
+      renderUserWorkplaceSelect("");
+      $("ufRole").value = "member";
+      $("ufApproverWrap").classList.remove("hidden");
+      renderApproverSelect("");
+      $("ufAdd").textContent = "追加してアカウント発行";
+      $("ufCancel").classList.add("hidden");
+      $("ufMsg").classList.add("hidden");
+      $("ufResult").classList.add("hidden");
+    }
+    $("ufCancel").addEventListener("click", cancelEditUser);
+
     $("ufAdd").addEventListener("click", async () => {
       const msg = $("ufMsg");
       const resBox = $("ufResult");
       msg.classList.add("hidden");
       resBox.classList.add("hidden");
+      const role = $("ufRole").value === "admin" ? "admin" : "member";
       const payload = {
         loginId: $("ufLogin").value.trim(),
         name: $("ufName").value.trim(),
         email: $("ufEmail").value.trim(),
         departmentId: $("ufDept").value,
+        workplaceId: $("ufWorkplace").value || null,
+        role,
+        approverUserId: role === "member" ? ($("ufApprover").value || null) : null,
       };
-      if (!payload.loginId || !payload.name) {
+      if ((!editingUserId && !payload.loginId) || !payload.name) {
         msg.textContent = "社員番号とユーザー名を入力してください";
         msg.className = "msg err";
         msg.classList.remove("hidden");
@@ -701,14 +1024,23 @@
       }
       $("ufAdd").disabled = true;
       try {
-        const r = await api("/api/users", { method: "POST", body: JSON.stringify(payload) });
-        msg.textContent = "「" + r.user.name + "」を登録しました。アカウント発行結果:";
+        let r;
+        let okText;
+        if (editingUserId) {
+          const { loginId, ...rest } = payload;
+          r = await api("/api/users", { method: "PUT", body: JSON.stringify({ id: editingUserId, ...rest }) });
+          okText = "「" + r.user.name + "」を更新しました。アプリへの再連携結果:";
+        } else {
+          r = await api("/api/users", { method: "POST", body: JSON.stringify(payload) });
+          okText = "「" + r.user.name + "」を登録しました。アカウント発行結果:";
+        }
+        cancelEditUser();
+        msg.textContent = okText;
         msg.className = "msg ok";
         msg.classList.remove("hidden");
         resBox.replaceChildren(linksBox(r.apps));
         resBox.classList.remove("hidden");
-        $("ufLogin").value = ""; $("ufName").value = ""; $("ufEmail").value = "";
-        await loadUsers();
+        await reloadAll();
       } catch (e) {
         msg.textContent = e.message;
         msg.className = "msg err";
@@ -718,8 +1050,48 @@
       }
     });
 
+    // ===== ②-2 滞留承認リセット =====
+    $("approvalsResetBtn").addEventListener("click", async () => {
+      if (!confirm("各アプリで承認待ちのまま滞留している申請を全てリセットします。よろしいですか？")) return;
+      const msg = $("approvalsResetMsg");
+      const box = $("approvalsResetResult");
+      msg.className = "msg";
+      msg.textContent = "リセットを実行中…";
+      msg.classList.remove("hidden");
+      box.classList.add("hidden");
+      $("approvalsResetBtn").disabled = true;
+      try {
+        const r = await api("/api/approvals-reset", { method: "POST", body: JSON.stringify({}) });
+        const results = r && Array.isArray(r.results) ? r.results : [];
+        msg.textContent = "リセットが完了しました。アプリごとの結果:";
+        msg.className = "msg ok";
+        const wrap = document.createElement("div");
+        wrap.className = "linksbox";
+        for (const x of results) {
+          const row = document.createElement("div");
+          row.className = "lrow";
+          const an = document.createElement("span");
+          an.className = "an";
+          an.textContent = x.name || (APPS[x.app] ? APPS[x.app].name : x.app);
+          row.appendChild(an);
+          const st = document.createElement("span");
+          st.className = "badge " + (x.ok ? "b-created" : "b-error");
+          st.textContent = x.ok ? "リセット " + (Number(x.reset) || 0) + " 件" : "エラー";
+          row.appendChild(st);
+          wrap.appendChild(row);
+        }
+        box.replaceChildren(wrap);
+        box.classList.remove("hidden");
+      } catch (e) {
+        msg.textContent = e.message;
+        msg.className = "msg err";
+      } finally {
+        $("approvalsResetBtn").disabled = false;
+      }
+    });
+
     // ===== ③ CSV一括登録 =====
-    const CSV_HEADER = ["社員番号", "ユーザー名", "職場コード", "職場名", "メール"];
+    const CSV_HEADER = ["社員番号", "ユーザー名", "部署コード", "部署名", "メール"];
     let csvRows = []; // [{loginId,name,departmentCode,departmentName,email}]
     let csvResults = []; // 結果（rows + apps）
 
@@ -830,7 +1202,7 @@
         : r.departmentName
           ? departments.find((d) => d.name === r.departmentName)
           : null;
-      if (!dept) return { ok: false, note: "職場が見つかりません" };
+      if (!dept) return { ok: false, note: "部署が見つかりません" };
       if (seen.has(r.loginId)) return { ok: false, note: "ファイル内で社員番号が重複しています" };
       seen.add(r.loginId);
       return { ok: true, note: "OK（" + (dept.code ? dept.code + " " : "") + dept.name + "）" };
@@ -891,7 +1263,7 @@
         prog.textContent = "完了: " + csvResults.length + " 行を処理しました";
         prog.className = "msg ok";
         renderCsvResults();
-        await loadUsers();
+        await reloadAll();
       } catch (e) {
         prog.textContent = "エラー: " + e.message + (csvResults.length ? "（" + csvResults.length + "行までは処理済み）" : "");
         prog.className = "msg err";
