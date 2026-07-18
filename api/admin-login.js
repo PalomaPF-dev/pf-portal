@@ -66,6 +66,24 @@ module.exports = async (req, res) => {
     return;
   }
 
+  // ===== まずマスターパスワードを照合 =====
+  // 社員番号欄に admin 等を入力してしまってもマスターパスワードが合っていればログインできるようにする
+  // （誤操作の救済。ポータル管理権限ユーザーの照合はマスター不一致のときのみ行う）
+  const masterHash = (process.env.PF_ADMIN_BOOTSTRAP_HASH || "").trim();
+  let masterMatched = false;
+  if (masterHash) {
+    try {
+      masterMatched = await bcrypt.compare(password, masterHash);
+    } catch {
+      masterMatched = false;
+    }
+  }
+  if (masterMatched) {
+    setSessionCookie(res, createSessionValue(secret, MASTER_KIND));
+    res.status(200).json({ ok: true, kind: "master" });
+    return;
+  }
+
   // ===== 社員番号あり: ポータル管理権限ユーザーのログイン =====
   if (loginId) {
     if (!LOGIN_ID_RE.test(loginId) || loginId.length > 64) {
@@ -99,23 +117,10 @@ module.exports = async (req, res) => {
     return;
   }
 
-  // ===== 社員番号なし: マスターパスワード =====
-  const hash = (process.env.PF_ADMIN_BOOTSTRAP_HASH || "").trim();
-  if (!hash) {
+  // ===== 社員番号なし・マスター不一致 =====
+  if (!masterHash) {
     res.status(503).json({ message: "サーバー設定が未完了です（管理者パスワード）" });
     return;
   }
-  let ok = false;
-  try {
-    ok = await bcrypt.compare(password, hash);
-  } catch {
-    ok = false;
-  }
-  if (!ok) {
-    res.status(401).json({ message: "パスワードが違います" });
-    return;
-  }
-
-  setSessionCookie(res, createSessionValue(secret, MASTER_KIND));
-  res.status(200).json({ ok: true, kind: "master" });
+  res.status(401).json({ message: "パスワードが違います" });
 };
