@@ -6,6 +6,9 @@ const { appBaseUrl } = require("../lib/appUrls");
 
 const APPROVAL_APPS = [
   { key: "hinshitsu", name: "品質管理" },
+  { key: "setsubi", name: "設備管理" },
+  { key: "tenchu", name: "転注管理" },
+  { key: "kanagata", name: "型管理" },
 ];
 
 const FETCH_TIMEOUT_MS = 8000;
