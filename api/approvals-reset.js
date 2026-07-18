@@ -2,7 +2,7 @@
 // 各アプリの /api/approvals/reset を共有シークレット PF_PROVISION_KEY で呼び、
 // 承認待ちのまま滞留している申請をまとめてリセットする。
 // 返り値: { results: [{ app, name, ok, reset }] }（reset = リセット件数）。
-const { requireAdmin } = require("../lib/portalAuth");
+const { requireManage } = require("../lib/portalAuth");
 const { appBaseUrl } = require("../lib/appUrls");
 
 // /api/approvals/reset を実装しているアプリだけを列挙する（導入拡大時に追記）。
@@ -41,7 +41,7 @@ module.exports = async (req, res) => {
     res.status(405).json({ message: "Method not allowed" });
     return;
   }
-  if (!requireAdmin(req, res)) return;
+  if (!requireManage(req, res)) return;
   const key = (process.env.PF_PROVISION_KEY || "").trim();
   if (!key) {
     res.status(503).json({ message: "サーバー設定が未完了です（PF_PROVISION_KEY）" });
