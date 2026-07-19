@@ -103,6 +103,19 @@
       padding: 32px 28px 26px; width: 100%; max-width: 420px;
       box-shadow: 0 1px 3px rgba(0,0,0,.04);
     }
+    .lhead { display: flex; flex-direction: column; align-items: center; text-align: center; margin-bottom: 22px; }
+    .lhead .lapp { width: 64px; height: 64px; border-radius: 16px; margin-bottom: 12px; }
+    .lhead .lorg { font-size: 11.5px; color: var(--sub); letter-spacing: .08em; }
+    .lhead .lname { font-size: 20px; font-weight: 700; color: var(--ink); letter-spacing: .04em; }
+    .lhead .lsub { font-size: 12px; color: var(--sub); margin-top: 4px; }
+    .lfirst {
+      display: block; width: 100%; margin-top: 18px; text-align: center;
+      background: #fdf5f5; border: 1px solid rgba(220,0,12,.35); border-radius: 10px;
+      color: var(--red); font-family: inherit; font-size: 13px; font-weight: 700;
+      padding: 11px 12px; cursor: pointer; transition: background .15s ease;
+    }
+    .lfirst:hover { background: #fbecec; }
+    .lnote { margin-top: 14px; text-align: center; font-size: 11.5px; color: var(--sub); line-height: 1.8; }
     .logincard h2 { font-size: 19px; font-weight: 700; letter-spacing: .04em; }
     .logincard h2::after {
       content: ""; display: block; width: 40px; height: 3px; background: var(--red);
@@ -194,11 +207,27 @@
     }
 
     /* リスト表示（1列コンパクト） */
-    .grid.vlist { grid-template-columns: 1fr; gap: 8px; }
-    .grid.vlist a.tile { padding: 10px 14px; border-radius: 12px; }
-    .grid.vlist .tile img { width: 36px; height: 36px; border-radius: 8px; }
-    .grid.vlist .tile .t { flex: 1; min-width: 0; }
-    .grid.vlist .tile .desc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* リスト表示: カードと明確に区別できる罫線区切りのコンパクト行 */
+    .grid.vlist {
+      grid-template-columns: 1fr; gap: 0;
+      background: #fff; border: 1px solid var(--card-line); border-radius: 12px;
+      overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    }
+    .grid.vlist a.tile {
+      padding: 9px 14px; border: none; border-radius: 0; box-shadow: none;
+      border-bottom: 1px solid var(--card-line); gap: 10px;
+    }
+    .grid.vlist a.tile:last-child { border-bottom: none; }
+    .grid.vlist a.tile:hover { transform: none; box-shadow: none; background: var(--soft); }
+    .grid.vlist .tile img { width: 26px; height: 26px; border-radius: 6px; }
+    .grid.vlist .tile .t { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; }
+    .grid.vlist .tile .name { font-size: 13.5px; }
+    .grid.vlist .tile .desc {
+      margin-top: 0; font-size: 11px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .grid.vlist a.tile.haspend { border-left: 3px solid var(--red); }
+    .grid.vlist .pbadge { position: static; margin-left: auto; flex-shrink: 0; }
 
     .note {
       margin-top: 26px; background: #fff; border: 1px solid var(--card-line);
@@ -257,27 +286,34 @@
     <section id="loginView" class="hidden">
       <div class="loginwrap">
         <div class="logincard">
+          <div class="lhead">
+            <img class="lapp" src="/icon-192.png" alt="" />
+            <p class="lorg">生産・調達統括本部</p>
+            <h1 class="lname">業務ポータル</h1>
+            <p class="lsub">各アプリへの一括ログイン</p>
+          </div>
           <h2 id="loginTitle">ログイン</h2>
-          <p class="loginlead" id="loginLead">社員番号とパスワードを入力してください。</p>
+          <p class="loginlead hidden" id="loginLead"></p>
           <p class="lmsg hidden" id="loginMsg"></p>
           <form id="loginForm">
             <label for="loginId">社員番号</label>
-            <input id="loginId" name="username" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" required />
+            <input id="loginId" name="username" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" placeholder="例: 12345" required />
             <label for="loginPw">パスワード</label>
-            <input id="loginPw" name="password" type="password" autocomplete="current-password" required />
+            <input id="loginPw" name="password" type="password" autocomplete="current-password" placeholder="••••••••" required />
             <button type="submit" class="lbtn" id="loginBtn">ログイン</button>
           </form>
           <form id="setupForm" class="hidden">
             <label for="setupId">社員番号</label>
-            <input id="setupId" name="username" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" required />
+            <input id="setupId" name="username" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" placeholder="例: 12345" required />
             <label for="setupPw1">新しいパスワード（8文字以上）</label>
             <input id="setupPw1" type="password" autocomplete="new-password" minlength="8" required />
             <label for="setupPw2">新しいパスワード（確認）</label>
             <input id="setupPw2" type="password" autocomplete="new-password" minlength="8" required />
             <button type="submit" class="lbtn" id="setupBtn">パスワードを設定してログイン</button>
           </form>
-          <button type="button" class="lswitch" id="toSetup">初めてログインする方はこちら（パスワード設定）</button>
+          <button type="button" class="lfirst" id="toSetup">初めてログインする方はこちら（パスワード設定）</button>
           <button type="button" class="lswitch hidden" id="toLogin">ログイン画面に戻る</button>
+          <p class="lnote">パスワードをお忘れの方は管理者にお問い合わせください</p>
         </div>
       </div>
     </section>
@@ -440,9 +476,11 @@
       $("toSetup").classList.toggle("hidden", setup);
       $("toLogin").classList.toggle("hidden", !setup);
       $("loginTitle").textContent = setup ? "初回パスワード設定" : "ログイン";
+      // 初回設定時のみ説明文を表示（通常ログインはアプリ各画面と同じ簡潔な構成）
       $("loginLead").textContent = setup
-        ? "社員番号と、新しいパスワード（8文字以上）を入力してください。設定後そのままログインします。"
-        : "社員番号とパスワードを入力してください。";
+        ? "管理者から発行された社員番号で、はじめに使うパスワードを設定します。設定後そのままログインします。"
+        : "";
+      $("loginLead").classList.toggle("hidden", !setup);
       showMsg(msg || "", kind);
     }
 
