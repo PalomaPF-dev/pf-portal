@@ -256,8 +256,17 @@
       .wrap { padding: 0 16px; }
       .sechead { margin: 26px 0 14px; }
       .sechead h2 { font-size: 17px; }
-      .grid { grid-template-columns: 1fr; gap: 10px; }
-      a.tile { padding: 14px 14px; }
+      /* スマホのカード表示: ホーム画面風の2列タイル（アイコン上・名前下）。
+         リスト表示(.vlist)は罫線区切りの細い行のままなので、両者の違いが一目で分かる */
+      .grid:not(.vlist) { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      .grid:not(.vlist) a.tile {
+        flex-direction: column; align-items: center; text-align: center;
+        gap: 8px; padding: 18px 10px 14px;
+      }
+      .grid:not(.vlist) .tile img { width: 46px; height: 46px; }
+      .grid:not(.vlist) .tile .name { white-space: normal; font-size: 13.5px; line-height: 1.4; }
+      .grid:not(.vlist) .tile .desc { display: none; }
+      .grid:not(.vlist) .tile .go { display: none; }
       .loginwrap { padding: 32px 0 48px; }
       .logincard { padding: 26px 20px 22px; }
     }
