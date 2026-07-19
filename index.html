@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="robots" content="noindex, nofollow" />
   <title>生産・調達統括本部 業務アプリポータル｜株式会社パロマ</title>
-  <meta name="description" content="生産・調達統括本部の現場アプリポータル。所属を選ぶと関係するアプリが表示されます。" />
+  <meta name="description" content="生産・調達統括本部の現場アプリポータル。社員番号でログインすると、所属部署のアプリが表示されます。" />
   <meta name="theme-color" content="#ffffff" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -49,13 +49,24 @@
       display: flex; align-items: center; gap: 14px;
     }
     header.site .brandlogo { height: 30px; width: auto; display: block; flex-shrink: 0; }
+    header.site .hright {
+      margin-left: auto; display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+    }
     header.site .hadmin {
-      margin-left: auto; color: var(--sub); font-size: 12px; text-decoration: none;
+      color: var(--sub); font-size: 12px; text-decoration: none;
       padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px;
       transition: color .15s ease, border-color .15s ease;
       flex-shrink: 0;
     }
     header.site .hadmin:hover { color: var(--red); border-color: var(--red); }
+    header.site .huser { color: var(--sub); font-size: 12px; white-space: nowrap; }
+    header.site .hlogout {
+      background: none; color: var(--sub); font-size: 12px; font-family: inherit;
+      padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
+      transition: color .15s ease, border-color .15s ease;
+      flex-shrink: 0;
+    }
+    header.site .hlogout:hover { color: var(--red); border-color: var(--red); }
 
     /* ===== ヘッダー内タイトル（社内ポータル表記） ===== */
     header.site .htitle {
@@ -85,40 +96,50 @@
     }
     .sechead p { font-size: 13px; color: var(--sub); margin-top: 10px; }
 
-    /* 所属選択 */
-    .affsec h3 {
-      font-size: 12px; color: var(--sub); letter-spacing: .12em; font-weight: 700;
-      margin: 24px 2px 10px;
-    }
-    .afflist { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-    button.aff {
-      background: #fff; border: 1px solid var(--card-line); border-radius: 14px;
-      padding: 18px 18px; text-align: left; cursor: pointer; font-family: inherit;
-      box-shadow: 0 1px 3px rgba(0,0,0,.04);
-      transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
-    }
-    button.aff:hover {
-      border-color: rgba(220,0,12,.45); transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(0,0,0,.08);
-    }
-    button.aff:active { transform: translateY(0); }
-    button.aff .an { display: block; font-size: 15px; font-weight: 700; color: var(--ink); }
-    button.aff .ad { display: block; font-size: 12px; color: var(--sub); margin-top: 5px; line-height: 1.6; }
-
-    /* 所属バー */
-    .affbar {
-      margin-top: 28px; display: flex; align-items: center; gap: 10px;
-      background: #fff; border: 1px solid var(--card-line); border-radius: 12px;
-      padding: 12px 18px; font-size: 13px;
+    /* ログイン */
+    .loginwrap { display: flex; justify-content: center; padding: 56px 0 64px; }
+    .logincard {
+      background: #fff; border: 1px solid var(--card-line); border-radius: 16px;
+      padding: 32px 28px 26px; width: 100%; max-width: 420px;
       box-shadow: 0 1px 3px rgba(0,0,0,.04);
     }
-    .affbar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); flex-shrink: 0; }
-    .affbar b { font-weight: 700; }
-    .affbar button {
-      margin-left: auto; background: none; border: none; color: var(--red);
-      font-size: 12px; cursor: pointer; font-family: inherit; text-decoration: underline;
-      flex-shrink: 0;
+    .logincard h2 { font-size: 19px; font-weight: 700; letter-spacing: .04em; }
+    .logincard h2::after {
+      content: ""; display: block; width: 40px; height: 3px; background: var(--red);
+      margin-top: 8px; border-radius: 2px;
     }
+    .loginlead { font-size: 12.5px; color: var(--sub); margin-top: 12px; line-height: 1.8; }
+    .logincard form { margin-top: 8px; }
+    .logincard label {
+      display: block; font-size: 12px; color: var(--sub); font-weight: 700;
+      letter-spacing: .06em; margin: 16px 2px 6px;
+    }
+    .logincard input {
+      width: 100%; font-family: inherit; font-size: 15px; padding: 10px 12px;
+      border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink);
+    }
+    .logincard input:focus {
+      outline: none; border-color: var(--red); box-shadow: 0 0 0 3px rgba(220,0,12,.08);
+    }
+    .lbtn {
+      width: 100%; margin-top: 22px;
+      background: var(--red); color: #fff; border: none; border-radius: 10px;
+      font-family: inherit; font-size: 14.5px; font-weight: 700; letter-spacing: .06em;
+      padding: 12px; cursor: pointer; transition: background .15s ease;
+    }
+    .lbtn:hover { background: var(--red-deep); }
+    .lbtn:disabled { opacity: .6; cursor: default; }
+    .lswitch {
+      display: block; width: 100%; margin-top: 18px;
+      background: none; border: none; color: var(--red); font-family: inherit;
+      font-size: 12.5px; cursor: pointer; text-decoration: underline; text-align: center;
+    }
+    .lmsg {
+      margin-top: 14px; font-size: 12.5px; color: var(--red); line-height: 1.7;
+      background: #fdf2f2; border: 1px solid rgba(220,0,12,.25); border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .lmsg.info { color: #1c4587; background: #f0f5fd; border-color: rgba(28,69,135,.25); }
 
     main.apps { padding: 0 0 48px; }
 
@@ -202,13 +223,14 @@
       header.site .htitle { margin-left: 10px; padding-left: 10px; gap: 8px; }
       header.site .htitle .tname { font-size: 13.5px; }
       header.site .htitle .tscope { display: none; }
+      header.site .huser { display: none; }
       .wrap { padding: 0 16px; }
       .sechead { margin: 26px 0 14px; }
       .sechead h2 { font-size: 17px; }
-      .afflist { grid-template-columns: 1fr; gap: 10px; }
       .grid { grid-template-columns: 1fr; gap: 10px; }
       a.tile { padding: 14px 14px; }
-      .affbar { margin-top: 20px; }
+      .loginwrap { padding: 32px 0 48px; }
+      .logincard { padding: 26px 20px 22px; }
     }
   </style>
 </head>
@@ -222,38 +244,49 @@
         <span class="tscope">生産・調達統括本部</span>
         <span class="hchip">社内用</span>
       </div>
-      <a class="hadmin" href="/admin.html">管理者</a>
+      <div class="hright">
+        <span class="huser hidden" id="huser"></span>
+        <button class="hlogout hidden" id="logoutBtn" type="button">ログアウト</button>
+        <a class="hadmin" href="/admin.html">管理者</a>
+      </div>
     </div>
   </header>
 
   <div class="wrap">
-    <!-- 所属選択ビュー -->
-    <section id="selectView" class="hidden">
-      <div class="sechead">
-        <h2>所属を選択してください</h2>
-        <p>あなたの部署・工場を選ぶと、業務に関係するアプリが表示されます。選択はこの端末に記憶され、あとから変更できます。</p>
-      </div>
-      <div class="affsec">
-        <h3>部署</h3>
-        <div class="afflist" id="deptList"></div>
-        <h3>工場</h3>
-        <div class="afflist" id="factList"></div>
-      </div>
-      <div class="note" style="margin-bottom:36px">
-        <strong>所属が見つからない場合</strong><br />
-        「すべてのアプリ」を選択してください。部署・工場の名称や表示されるアプリの組み合わせは、管理者が変更できます。
+    <!-- ログインビュー -->
+    <section id="loginView" class="hidden">
+      <div class="loginwrap">
+        <div class="logincard">
+          <h2 id="loginTitle">ログイン</h2>
+          <p class="loginlead" id="loginLead">社員番号とパスワードを入力してください。</p>
+          <p class="lmsg hidden" id="loginMsg"></p>
+          <form id="loginForm">
+            <label for="loginId">社員番号</label>
+            <input id="loginId" name="username" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" required />
+            <label for="loginPw">パスワード</label>
+            <input id="loginPw" name="password" type="password" autocomplete="current-password" required />
+            <button type="submit" class="lbtn" id="loginBtn">ログイン</button>
+          </form>
+          <form id="setupForm" class="hidden">
+            <label for="setupId">社員番号</label>
+            <input id="setupId" name="username" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" required />
+            <label for="setupPw1">新しいパスワード（8文字以上）</label>
+            <input id="setupPw1" type="password" autocomplete="new-password" minlength="8" required />
+            <label for="setupPw2">新しいパスワード（確認）</label>
+            <input id="setupPw2" type="password" autocomplete="new-password" minlength="8" required />
+            <button type="submit" class="lbtn" id="setupBtn">パスワードを設定してログイン</button>
+          </form>
+          <button type="button" class="lswitch" id="toSetup">初めてログインする方はこちら（パスワード設定）</button>
+          <button type="button" class="lswitch hidden" id="toLogin">ログイン画面に戻る</button>
+        </div>
       </div>
     </section>
 
     <!-- アプリ一覧ビュー -->
     <section id="appsView" class="hidden">
-      <div class="affbar">
-        <span class="dot"></span>
-        <span>所属：<b id="affName">—</b></span>
-        <button id="changeAff" type="button">変更</button>
-      </div>
       <div class="sechead">
         <h2>アプリ一覧</h2>
+        <p>所属：<b id="affName">—</b>　アプリを選ぶと自動でログインします。</p>
       </div>
       <main class="apps">
         <div class="viewset">
@@ -263,10 +296,14 @@
             <button type="button" id="viewList">リスト</button>
           </div>
         </div>
+        <div class="note hidden" id="noDeptNote" style="margin: 0 0 16px">
+          <strong>表示できるアプリがありません</strong><br />
+          所属部署が設定されていないか、部署にアプリが割り当てられていません。管理者にお問い合わせください。
+        </div>
         <div class="grid" id="appGrid"></div>
         <div class="note">
-          <strong>はじめての方へ</strong><br />
-          ログインは<strong>社員番号とパスワード</strong>です。アカウントは管理者が発行します。ログインできない場合は管理者にご連絡ください。<br />
+          <strong>ご利用にあたって</strong><br />
+          各アプリはポータルから<strong>自動でログイン</strong>されます（図面管理を除く）。うまく開けない場合は管理者にご連絡ください。<br />
           iPhoneでは、Safariの共有メニューから<strong>「ホーム画面に追加」</strong>すると、このポータルや各アプリをアプリのように使えます。
         </div>
       </main>
@@ -280,6 +317,7 @@
 
   <script>
     // ===== アプリ定義 =====
+    // url はSSO非対応アプリ（zumen: 端末内アプリ）の直接リンク用。SSO対応アプリは /api/launch 経由で開く。
     const APPS = {
       keikaku:  { name: "生産計画", desc: "販売計画・MRP・日割り", url: "https://plan.paloma-pf.com" },
       nippou:   { name: "生産日報", desc: "設備負荷・工数・日報", url: "https://load.paloma-pf.com" },
@@ -293,75 +331,34 @@
       hoju:     { name: "補充計画", desc: "輸入部材の在庫補充・船便/AIR", url: "https://hoju.paloma-pf.com" },
       tenchu:   { name: "転注管理", desc: "生産場所変更・引継ぎ・BOM変更", url: "https://tenchu.paloma-pf.com" },
     };
-    const ALL = ["keikaku","nippou","sekisai","zumen","keisoku","setsubi","hinshitsu","zaiko","kanagata","hoju","tenchu"];
+    // SSOで自動ログインできるアプリ（zumen 以外）
+    const SSO_APPS = new Set(["keikaku","nippou","sekisai","keisoku","setsubi","hinshitsu","zaiko","kanagata","hoju","tenchu"]);
 
-    // ===== 所属→表示アプリの対応（既定リスト。通常は /api/departments から取得） =====
-    const FALLBACK_DEPTS = [
-      { id: "seisan-kanri", name: "生産管理部", desc: "計画・日報・出荷・在庫・転注", apps: ["keikaku","nippou","sekisai","zaiko","tenchu"] },
-      { id: "chotatsu",     name: "調達部",     desc: "計画・補充・図面・在庫・型・転注", apps: ["keikaku","hoju","zumen","zaiko","kanagata","tenchu"] },
-      { id: "hinshou",      name: "品質保証部", desc: "品質・計測",             apps: ["hinshitsu","keisoku"] },
-      { id: "all",          name: "すべてのアプリ", desc: "管理者・その他の部署", apps: ALL },
-    ];
-    const FALLBACK_FACTS = [
-      { id: "factory-1", name: "第一工場", desc: "設備・計測・品質", apps: ["setsubi","keisoku","hinshitsu"] },
-      { id: "factory-2", name: "第二工場", desc: "設備・計測・品質", apps: ["setsubi","keisoku","hinshitsu"] },
-    ];
-    let DEPTS = FALLBACK_DEPTS;
-    let FACTS = FALLBACK_FACTS;
-    let AFFS = [...DEPTS, ...FACTS];
-
-    // 旧ハードコードid → 名称（DB移行後も保存済みの選択を引き継ぐ）
-    const LEGACY_IDS = {
-      "seisan-kanri": "生産管理部", "chotatsu": "調達部", "hinshou": "品質保証部",
-      "all": "すべてのアプリ", "factory-1": "第一工場", "factory-2": "第二工場",
-    };
-
-    // APIから職場一覧を取得（失敗・0件時は既定リストのまま）
-    async function loadDepartments() {
-      try {
-        const r = await fetch("/api/departments", { headers: { "Accept": "application/json" } });
-        if (!r.ok) return;
-        const rows = await r.json();
-        if (!Array.isArray(rows) || rows.length === 0) return;
-        const mapped = rows
-          .filter((d) => d && d.id && d.name)
-          .map((d) => ({
-            id: String(d.id),
-            name: String(d.name),
-            desc: String(d.description || ""),
-            kind: d.kind === "factory" ? "factory" : "dept",
-            apps: (Array.isArray(d.apps) ? d.apps : []).filter((k) => APPS[k]), // 未知キーは無視
-          }));
-        if (mapped.length === 0) return;
-        DEPTS = mapped.filter((d) => d.kind === "dept");
-        FACTS = mapped.filter((d) => d.kind === "factory");
-        AFFS = [...DEPTS, ...FACTS];
-      } catch (e) {
-        // オフライン・API未設定時は既定リストにフォールバック
-      }
-    }
-
-    const KEY = "pf-affiliation";
     const $ = (id) => document.getElementById(id);
 
-    function renderSelect() {
-      const mk = (a) => {
-        const b = document.createElement("button");
-        b.className = "aff"; b.type = "button";
-        b.innerHTML = '<span class="an">' + a.name + '</span><span class="ad">' + a.desc + '</span>';
-        b.addEventListener("click", () => { localStorage.setItem(KEY, a.id); show(); });
-        return b;
-      };
-      $("deptList").replaceChildren(...DEPTS.map(mk));
-      $("factList").replaceChildren(...FACTS.map(mk));
+    // ===== ビュー切替（ログイン / アプリ一覧） =====
+    function showView(which) {
+      $("loginView").classList.toggle("hidden", which !== "login");
+      $("appsView").classList.toggle("hidden", which !== "apps");
     }
 
-    function renderApps(aff) {
-      $("affName").textContent = aff.name;
-      const tiles = aff.apps.map((k) => {
+    function setHeaderUser(sess) {
+      const on = !!sess;
+      if (on) $("huser").textContent = sess.name + " さん（" + (sess.departmentName || "所属未設定") + "）";
+      $("huser").classList.toggle("hidden", !on);
+      $("logoutBtn").classList.toggle("hidden", !on);
+    }
+
+    // ===== アプリ一覧（セッションの所属部署アプリのみ表示） =====
+    function renderApps(sess) {
+      $("affName").textContent = sess.departmentName || "所属未設定";
+      const keys = (sess.apps || []).filter((k) => APPS[k]); // 未知キーは無視
+      const tiles = keys.map((k) => {
         const a = APPS[k];
         const el = document.createElement("a");
-        el.className = "tile"; el.href = a.url; el.dataset.app = k;
+        el.className = "tile";
+        el.href = SSO_APPS.has(k) ? "/api/launch?app=" + encodeURIComponent(k) : a.url;
+        el.dataset.app = k;
         el.innerHTML =
           '<img src="/icons/' + k + '.png" alt="" />' +
           '<span class="t"><span class="name">' + a.name + '</span><span class="desc">' + a.desc + '</span></span>' +
@@ -369,8 +366,15 @@
         return el;
       });
       $("appGrid").replaceChildren(...tiles);
+      $("noDeptNote").classList.toggle("hidden", keys.length > 0);
       applyView(currentView());
-      loadApprovals(aff);
+      loadApprovals(keys);
+    }
+
+    function enterApps(sess) {
+      setHeaderUser(sess);
+      renderApps(sess);
+      showView("apps");
     }
 
     // ===== 表示設定（カード / リスト） =====
@@ -389,9 +393,9 @@
     $("viewCard").addEventListener("click", () => { localStorage.setItem(VIEW_KEY, "card"); applyView("card"); });
     $("viewList").addEventListener("click", () => { localStorage.setItem(VIEW_KEY, "list"); applyView("list"); });
 
-    // 各アプリカード上に「承認待ち」バッジを表示。取得失敗時は何もしない。
-    function loadApprovals(aff) {
-      const allow = new Set(aff.apps || []);
+    // 各アプリカード上に「承認待ち」バッジを表示（表示中アプリのみ）。取得失敗時は何もしない。
+    function loadApprovals(appKeys) {
+      const allow = new Set(appKeys || []);
       fetch("/api/approvals")
         .then((r) => (r.ok ? r.json() : { apps: [] }))
         .then((d) => {
@@ -415,31 +419,135 @@
         .catch(() => {});
     }
 
-    function findAff(saved) {
-      if (!saved) return null;
-      let aff = AFFS.find((a) => a.id === saved);
-      if (!aff && LEGACY_IDS[saved]) {
-        aff = AFFS.find((a) => a.name === LEGACY_IDS[saved]);
-        if (aff) localStorage.setItem(KEY, aff.id); // 新idに引き継ぎ
+    // ===== ログイン / 初回パスワード設定 =====
+    function showMsg(text, kind) {
+      const m = $("loginMsg");
+      if (!text) {
+        m.classList.add("hidden");
+        m.textContent = "";
+        return;
       }
-      return aff || null;
+      m.textContent = text;
+      m.classList.toggle("info", kind === "info");
+      m.classList.remove("hidden");
     }
 
-    function show() {
-      const saved = localStorage.getItem(KEY);
-      const aff = findAff(saved);
-      if (aff) {
-        renderApps(aff);
-        $("selectView").classList.add("hidden");
-        $("appsView").classList.remove("hidden");
-      } else {
-        renderSelect();
-        $("appsView").classList.add("hidden");
-        $("selectView").classList.remove("hidden");
-      }
+    // mode: "login" | "setup"（初回パスワード設定）
+    function switchMode(mode, msg, kind) {
+      const setup = mode === "setup";
+      $("loginForm").classList.toggle("hidden", setup);
+      $("setupForm").classList.toggle("hidden", !setup);
+      $("toSetup").classList.toggle("hidden", setup);
+      $("toLogin").classList.toggle("hidden", !setup);
+      $("loginTitle").textContent = setup ? "初回パスワード設定" : "ログイン";
+      $("loginLead").textContent = setup
+        ? "社員番号と、新しいパスワード（8文字以上）を入力してください。設定後そのままログインします。"
+        : "社員番号とパスワードを入力してください。";
+      showMsg(msg || "", kind);
     }
-    $("changeAff").addEventListener("click", () => { localStorage.removeItem(KEY); show(); });
-    loadDepartments().then(show, show);
+
+    $("toSetup").addEventListener("click", () => {
+      $("setupId").value = $("loginId").value.trim();
+      switchMode("setup");
+    });
+    $("toLogin").addEventListener("click", () => switchMode("login"));
+
+    async function postJson(url, body) {
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const d = await r.json().catch(() => ({}));
+      return { ok: r.ok, status: r.status, data: d };
+    }
+
+    async function doLogin(loginId, password) {
+      const { ok, status, data } = await postJson("/api/user-login", { loginId, password });
+      if (status === 409 && data.needsSetup) {
+        // パスワード未設定 → 初回設定フォームへ自動で切り替え
+        $("setupId").value = loginId;
+        switchMode("setup", data.message || "初回ログインのため、パスワードの設定が必要です", "info");
+        return;
+      }
+      if (!ok) {
+        showMsg(data.message || "ログインできませんでした。時間をおいて再度お試しください。");
+        return;
+      }
+      $("loginPw").value = "";
+      enterApps(data);
+    }
+
+    $("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const loginId = $("loginId").value.trim();
+      const password = $("loginPw").value;
+      if (!loginId || !password) return;
+      showMsg("");
+      $("loginBtn").disabled = true;
+      try {
+        await doLogin(loginId, password);
+      } catch {
+        showMsg("通信に失敗しました。ネットワークを確認して再度お試しください。");
+      } finally {
+        $("loginBtn").disabled = false;
+      }
+    });
+
+    $("setupForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const loginId = $("setupId").value.trim();
+      const pw1 = $("setupPw1").value;
+      const pw2 = $("setupPw2").value;
+      if (pw1.length < 8) {
+        showMsg("パスワードは8文字以上で設定してください");
+        return;
+      }
+      if (pw1 !== pw2) {
+        showMsg("確認用パスワードが一致しません");
+        return;
+      }
+      showMsg("");
+      $("setupBtn").disabled = true;
+      try {
+        const { ok, data } = await postJson("/api/user-first-login", { loginId, password: pw1 });
+        if (!ok) {
+          showMsg(data.message || "パスワードを設定できませんでした");
+          return;
+        }
+        await doLogin(loginId, pw1); // 設定できたらそのままログイン
+      } catch {
+        showMsg("通信に失敗しました。ネットワークを確認して再度お試しください。");
+      } finally {
+        $("setupBtn").disabled = false;
+      }
+    });
+
+    $("logoutBtn").addEventListener("click", async () => {
+      try {
+        await fetch("/api/user-login", { method: "DELETE" });
+      } catch {}
+      setHeaderUser(null);
+      switchMode("login");
+      showView("login");
+    });
+
+    // ===== 起動時: セッション確認 → アプリ一覧 or ログイン =====
+    (async function boot() {
+      try {
+        const r = await fetch("/api/user-session", { headers: { "Accept": "application/json" } });
+        if (r.ok) {
+          const d = await r.json().catch(() => null);
+          if (d && d.ok) {
+            enterApps(d);
+            return;
+          }
+        }
+      } catch {}
+      setHeaderUser(null);
+      switchMode("login");
+      showView("login");
+    })();
   </script>
 </body>
 </html>
