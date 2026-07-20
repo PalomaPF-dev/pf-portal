@@ -100,6 +100,7 @@
       padding: 10px 14px; border-bottom: 3px solid transparent; margin-bottom: -2px;
     }
     .tabs button.on { color: var(--ink); border-bottom-color: var(--red); }
+    .tabbadge { display: inline-block; margin-left: 6px; background: var(--red); color: #fff; font-size: 10px; font-weight: 700; border-radius: 999px; padding: 1px 6px; vertical-align: middle; }
 
     /* テーブル */
     .tblwrap { overflow-x: auto; margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; }
@@ -206,6 +207,7 @@
         <button data-tab="depts" class="on" type="button">部署設定</button>
         <button data-tab="users" type="button">ユーザー設定</button>
         <button data-tab="csv" type="button">CSV一括登録</button>
+        <button data-tab="inq" type="button">お問い合わせ<span id="inqBadge" class="tabbadge hidden">0</span></button>
         <span style="margin-left:auto"></span>
         <button data-tab="" id="logoutBtn" type="button" style="color:var(--sub);font-weight:400;font-size:12px">ログアウト</button>
       </div>
@@ -429,6 +431,28 @@
           <button class="ghost" id="csvDownloadLinks" type="button">発行結果をCSVダウンロード</button>
         </div>
       </div>
+
+      <!-- ④ お問い合わせ -->
+      <div id="tab-inq" class="tabsec hidden">
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:10px">
+            <h2 style="margin:0">お問い合わせ一覧</h2>
+            <button class="ghost" id="inqReload" type="button" style="margin:0 0 0 auto;font-size:12px">再読み込み</button>
+          </div>
+          <p style="font-size:12px;color:var(--sub);line-height:1.9;margin-top:8px">
+            ポータルのお問い合わせフォームから届いた内容です。対応が済んだものは「対応済みにする」で下部へ移動します。
+          </p>
+          <div class="msg err hidden" id="inqMsg"></div>
+          <div class="tblwrap">
+            <table class="tbl">
+              <thead>
+                <tr><th>受付日時</th><th>分類</th><th>社員番号</th><th>氏名</th><th>内容</th><th>状態</th></tr>
+              </thead>
+              <tbody id="inqRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </section>
   </div>
 
@@ -505,6 +529,18 @@
     async function reloadAll() {
       await Promise.all([loadDepartments(), loadWorkplaces(), loadUsers()]);
       renderAll();
+      updateInqBadge();
+    }
+
+    // お問い合わせ未対応件数のバッジのみ更新（一覧は開いたときに読み込む）
+    async function updateInqBadge() {
+      try {
+        const list = await api("/api/contact");
+        const n = list.filter((x) => x.status !== "resolved").length;
+        const badge = $("inqBadge");
+        badge.textContent = String(n);
+        badge.classList.toggle("hidden", n === 0);
+      } catch { /* 取得失敗時はバッジ非表示のまま */ }
     }
 
     function renderAll() {
@@ -551,9 +587,66 @@
       b.addEventListener("click", () => {
         document.querySelectorAll(".tabs button[data-tab]").forEach((x) => x.classList.remove("on"));
         b.classList.add("on");
-        ["depts", "users", "csv"].forEach((t) => $("tab-" + t).classList.toggle("hidden", t !== b.dataset.tab));
+        ["depts", "users", "csv", "inq"].forEach((t) => $("tab-" + t).classList.toggle("hidden", t !== b.dataset.tab));
+        if (b.dataset.tab === "inq") loadInquiries();
       });
     });
+
+    // ===== ④ お問い合わせ =====
+    function escHtml(s) {
+      return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => (
+        { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+    async function loadInquiries() {
+      const tb = $("inqRows");
+      $("inqMsg").classList.add("hidden");
+      tb.innerHTML = '<tr><td colspan="6" style="color:var(--sub)">読み込み中…</td></tr>';
+      try {
+        const list = await api("/api/contact");
+        const openCount = list.filter((x) => x.status !== "resolved").length;
+        const badge = $("inqBadge");
+        badge.textContent = String(openCount);
+        badge.classList.toggle("hidden", openCount === 0);
+        if (list.length === 0) {
+          tb.innerHTML = '<tr><td colspan="6" style="color:var(--sub)">お問い合わせはありません。</td></tr>';
+          return;
+        }
+        tb.innerHTML = list.map((x) => {
+          const dt = x.createdAt ? new Date(x.createdAt).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+          const resolved = x.status === "resolved";
+          const btn = resolved
+            ? '<button class="ghost inq-toggle" data-id="' + x.id + '" data-to="open" style="font-size:11px;margin:0">未対応に戻す</button>'
+            : '<button class="primary inq-toggle" data-id="' + x.id + '" data-to="resolved" style="font-size:11px;margin:0">対応済みにする</button>';
+          const state = resolved ? '<span class="sub">対応済み</span>' : '<b style="color:var(--red)">未対応</b>';
+          return '<tr style="' + (resolved ? "opacity:.6" : "") + '">' +
+            '<td style="white-space:nowrap">' + dt + '</td>' +
+            '<td style="white-space:nowrap">' + escHtml(x.category) + '</td>' +
+            '<td>' + escHtml(x.loginId) + '</td>' +
+            '<td>' + escHtml(x.name) + '</td>' +
+            '<td style="white-space:pre-wrap;max-width:340px">' + escHtml(x.message) + '</td>' +
+            '<td style="white-space:nowrap">' + state + '<br />' + btn + '</td>' +
+            '</tr>';
+        }).join("");
+        tb.querySelectorAll(".inq-toggle").forEach((b) => {
+          b.addEventListener("click", async () => {
+            b.disabled = true;
+            try {
+              await api("/api/contact", { method: "PATCH", body: JSON.stringify({ id: b.dataset.id, status: b.dataset.to }) });
+              await loadInquiries();
+            } catch (e) {
+              b.disabled = false;
+              $("inqMsg").textContent = e.message || "更新に失敗しました";
+              $("inqMsg").classList.remove("hidden");
+            }
+          });
+        });
+      } catch (e) {
+        tb.innerHTML = "";
+        $("inqMsg").textContent = e.message || "読み込みに失敗しました";
+        $("inqMsg").classList.remove("hidden");
+      }
+    }
+    $("inqReload").addEventListener("click", loadInquiries);
 
     // ===== ① 部署設定 =====
     let editingDeptId = null;

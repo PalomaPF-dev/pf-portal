@@ -248,8 +248,49 @@
       box-shadow: 0 1px 3px rgba(0,0,0,.04);
     }
     .note strong { color: var(--ink); }
-    .note .notelink { color: var(--red); text-decoration: underline; font-weight: 700; }
+    .note .notelink {
+      color: var(--red); text-decoration: underline; font-weight: 700;
+      background: none; border: none; font-family: inherit; font-size: inherit; cursor: pointer; padding: 0;
+    }
     .note .notelink:hover { color: var(--red-deep); }
+
+    /* お問い合わせモーダル */
+    .modal-ov {
+      position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      display: flex; align-items: flex-start; justify-content: center;
+      padding: 40px 16px; z-index: 50; overflow-y: auto;
+    }
+    .modal-card {
+      background: #fff; border-radius: 16px; width: 100%; max-width: 460px;
+      padding: 24px 24px 22px; box-shadow: 0 12px 40px rgba(0,0,0,.25);
+    }
+    .modal-card h3 { font-size: 17px; font-weight: 700; }
+    .modal-card h3::after {
+      content: ""; display: block; width: 36px; height: 3px; background: var(--red);
+      margin-top: 8px; border-radius: 2px;
+    }
+    .modal-card .mlead { font-size: 12px; color: var(--sub); margin-top: 12px; line-height: 1.8; }
+    .modal-card label { display: block; font-size: 12px; color: var(--sub); font-weight: 700; letter-spacing: .04em; margin: 14px 2px 6px; }
+    .modal-card label .req { color: var(--red); margin-left: 4px; font-size: 11px; }
+    .modal-card input, .modal-card select, .modal-card textarea {
+      width: 100%; font-family: inherit; font-size: 14px; padding: 9px 11px;
+      border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink);
+    }
+    .modal-card textarea { resize: vertical; min-height: 96px; }
+    .modal-card input:focus, .modal-card select:focus, .modal-card textarea:focus {
+      outline: none; border-color: var(--red); box-shadow: 0 0 0 3px rgba(220,0,12,.08);
+    }
+    .modal-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+    .modal-actions button { flex: 1; border-radius: 10px; font-family: inherit; font-size: 14px; font-weight: 700; padding: 11px; cursor: pointer; transition: background .15s ease, color .15s ease; }
+    .mbtn-send { background: var(--red); color: #fff; border: none; }
+    .mbtn-send:hover { background: var(--red-deep); }
+    .mbtn-send:disabled { opacity: .6; cursor: default; }
+    .mbtn-close { background: #fff; color: var(--sub); border: 1px solid var(--line); }
+    .mbtn-close:hover { color: var(--ink); border-color: var(--sub); }
+    .modal-msg { margin-top: 14px; font-size: 12.5px; border-radius: 10px; padding: 10px 12px; line-height: 1.7; }
+    .modal-msg.err { color: var(--red); background: #fdf2f2; border: 1px solid rgba(220,0,12,.25); }
+    .modal-msg.ok { color: #1a7f37; background: #eef8f0; border: 1px solid rgba(26,127,55,.25); }
 
     footer.site {
       background: #fff; border-top: 1px solid var(--line);
@@ -362,7 +403,7 @@
         <div class="grid" id="appGrid"></div>
         <div class="note">
           <strong>ご利用にあたって</strong><br />
-          各アプリはポータルから<strong>自動でログイン</strong>されます（図面管理を除く）。うまく開けない場合や不明な点は、<a class="notelink" href="mailto:info@paloma-pf.com">info@paloma-pf.com</a> までお問い合わせください。
+          各アプリはポータルから<strong>自動でログイン</strong>されます（図面管理を除く）。うまく開けない場合や不明な点は、<button type="button" class="notelink" id="openContact">お問い合わせフォーム</button>からご連絡ください。
         </div>
       </main>
     </section>
@@ -372,6 +413,37 @@
     株式会社パロマ 生産・調達統括本部（社内システム）<br />
     <span class="c">本ポータルおよび各アプリは社内業務専用です。</span>
   </footer>
+
+  <!-- お問い合わせモーダル -->
+  <div class="modal-ov hidden" id="contactModal">
+    <div class="modal-card">
+      <h3>お問い合わせ</h3>
+      <p class="mlead">システムの不具合・操作方法・アカウントに関するご連絡はこちらから。担当者が確認します。</p>
+      <form id="contactForm">
+        <label for="cCat">お問い合わせ分類<span class="req">必須</span></label>
+        <select id="cCat" required>
+          <option value="ログインできない">ログインできない</option>
+          <option value="アプリのエラー・不具合">アプリのエラー・不具合</option>
+          <option value="アカウント・権限（部署／職場／承認者）">アカウント・権限（部署／職場／承認者）</option>
+          <option value="操作方法について">操作方法について</option>
+          <option value="機能の要望・改善">機能の要望・改善</option>
+          <option value="その他">その他</option>
+        </select>
+        <label for="cLoginId">社員番号<span class="req">必須</span></label>
+        <input id="cLoginId" type="text" autocomplete="off" autocapitalize="off" required />
+        <label for="cName">氏名<span class="req">必須</span></label>
+        <input id="cName" type="text" autocomplete="off" required />
+        <label for="cMsg">お問い合わせ内容<span class="req">必須</span></label>
+        <textarea id="cMsg" maxlength="2000" placeholder="できるだけ具体的にご記入ください（対象アプリ・発生した操作・エラー表示など）" required></textarea>
+        <input class="modal-hp" id="cHp" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" />
+        <div class="modal-msg hidden" id="cMsgBox"></div>
+        <div class="modal-actions">
+          <button type="button" class="mbtn-close" id="cClose">閉じる</button>
+          <button type="submit" class="mbtn-send" id="cSend">送信する</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <script>
     // ===== アプリ定義 =====
@@ -452,7 +524,9 @@
       loadApprovals(keys);
     }
 
+    let CURRENT_SESS = null;
     function enterApps(sess) {
+      CURRENT_SESS = sess;
       setHeaderUser(sess);
       renderApps(sess);
       showView("apps");
@@ -473,6 +547,58 @@
     }
     $("viewCard").addEventListener("click", () => { localStorage.setItem(VIEW_KEY, "card"); applyView("card"); });
     $("viewList").addEventListener("click", () => { localStorage.setItem(VIEW_KEY, "list"); applyView("list"); });
+
+    // ===== お問い合わせフォーム =====
+    function cShowMsg(text, kind) {
+      const box = $("cMsgBox");
+      box.textContent = text || "";
+      box.className = "modal-msg" + (kind ? " " + kind : "") + (text ? "" : " hidden");
+    }
+    function openContact() {
+      // ログイン中の社員番号・氏名を初期表示（必須・編集可）
+      $("cLoginId").value = (CURRENT_SESS && CURRENT_SESS.loginId) || "";
+      $("cName").value = (CURRENT_SESS && CURRENT_SESS.name) || "";
+      $("cCat").value = "ログインできない";
+      $("cMsg").value = "";
+      $("cHp").value = "";
+      cShowMsg("");
+      $("cSend").disabled = false;
+      $("contactModal").classList.remove("hidden");
+    }
+    function closeContact() { $("contactModal").classList.add("hidden"); }
+    $("openContact").addEventListener("click", openContact);
+    $("cClose").addEventListener("click", closeContact);
+    $("contactModal").addEventListener("click", (e) => { if (e.target === $("contactModal")) closeContact(); });
+
+    $("contactForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const loginId = $("cLoginId").value.trim();
+      const name = $("cName").value.trim();
+      const message = $("cMsg").value.trim();
+      if (!loginId) { cShowMsg("社員番号を入力してください", "err"); return; }
+      if (!name) { cShowMsg("氏名を入力してください", "err"); return; }
+      if (!message) { cShowMsg("お問い合わせ内容を入力してください", "err"); return; }
+      cShowMsg("");
+      $("cSend").disabled = true;
+      try {
+        const { ok, status, data } = await postJson("/api/contact", {
+          category: $("cCat").value, loginId, name, message, website: $("cHp").value,
+        });
+        if (ok) {
+          cShowMsg("送信しました。担当者からの連絡をお待ちください。", "ok");
+          $("cMsg").value = "";
+          setTimeout(closeContact, 1800);
+        } else if (status === 401) {
+          cShowMsg("セッションが切れています。お手数ですが再度ログインしてください。", "err");
+        } else {
+          cShowMsg((data && data.message) || "送信できませんでした。時間をおいて再度お試しください。", "err");
+        }
+      } catch {
+        cShowMsg("通信に失敗しました。ネットワークを確認して再度お試しください。", "err");
+      } finally {
+        $("cSend").disabled = false;
+      }
+    });
 
     // 各アプリカード上に「承認待ち」バッジを表示（表示中アプリのみ）。取得失敗時は何もしない。
     function loadApprovals(appKeys) {
