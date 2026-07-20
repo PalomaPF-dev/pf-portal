@@ -362,7 +362,7 @@
 
   <script>
     // ===== アプリ定義 =====
-    // url はSSO非対応アプリ（zumen: 端末内アプリ）の直接リンク用。SSO対応アプリは /api/launch 経由で開く。
+    // url はSSO非対応アプリ（zumen: 端末内アプリ）の直接リンク用。SSO対応アプリは /api/user?launch= 経由で開く。
     const APPS = {
       keikaku:  { name: "生産計画", desc: "販売計画・MRP・日割り", url: "https://plan.paloma-pf.com" },
       nippou:   { name: "生産日報", desc: "設備負荷・工数・日報", url: "https://load.paloma-pf.com" },
@@ -402,7 +402,7 @@
         const a = APPS[k];
         const el = document.createElement("a");
         el.className = "tile";
-        el.href = SSO_APPS.has(k) ? "/api/launch?app=" + encodeURIComponent(k) : a.url;
+        el.href = SSO_APPS.has(k) ? "/api/user?launch=" + encodeURIComponent(k) : a.url;
         el.dataset.app = k;
         el.innerHTML =
           '<img src="/icons/' + k + '.png" alt="" />' +
@@ -510,7 +510,7 @@
     }
 
     async function doLogin(loginId, password) {
-      const { ok, status, data } = await postJson("/api/user-login", { loginId, password });
+      const { ok, status, data } = await postJson("/api/user", { action: "login", loginId, password });
       if (status === 409 && data.needsSetup) {
         // パスワード未設定 → 初回設定フォームへ自動で切り替え
         $("setupId").value = loginId;
@@ -557,7 +557,7 @@
       showMsg("");
       $("setupBtn").disabled = true;
       try {
-        const { ok, data } = await postJson("/api/user-first-login", { loginId, password: pw1 });
+        const { ok, data } = await postJson("/api/user", { action: "setup", loginId, password: pw1 });
         if (!ok) {
           showMsg(data.message || "パスワードを設定できませんでした");
           return;
@@ -572,7 +572,7 @@
 
     $("logoutBtn").addEventListener("click", async () => {
       try {
-        await fetch("/api/user-login", { method: "DELETE" });
+        await fetch("/api/user", { method: "DELETE" });
       } catch {}
       setHeaderUser(null);
       switchMode("login");
@@ -582,7 +582,7 @@
     // ===== 起動時: セッション確認 → アプリ一覧 or ログイン =====
     (async function boot() {
       try {
-        const r = await fetch("/api/user-session", { headers: { "Accept": "application/json" } });
+        const r = await fetch("/api/user", { headers: { "Accept": "application/json" } });
         if (r.ok) {
           const d = await r.json().catch(() => null);
           if (d && d.ok) {
