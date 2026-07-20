@@ -387,16 +387,23 @@
       $("appsView").classList.toggle("hidden", which !== "apps");
     }
 
+    // 所属表記: 「部署 › 職場」。職場未設定なら部署のみ、部署未設定なら「所属未設定」。
+    function affLabel(sess) {
+      const dept = sess.departmentName || "";
+      const wp = sess.workplaceName || "";
+      if (dept && wp) return dept + " › " + wp;
+      return dept || "所属未設定";
+    }
     function setHeaderUser(sess) {
       const on = !!sess;
-      if (on) $("huser").textContent = sess.name + " さん（" + (sess.departmentName || "所属未設定") + "）";
+      if (on) $("huser").textContent = sess.name + " さん（" + affLabel(sess) + "）";
       $("huser").classList.toggle("hidden", !on);
       $("logoutBtn").classList.toggle("hidden", !on);
     }
 
     // ===== アプリ一覧（セッションの所属部署アプリのみ表示） =====
     function renderApps(sess) {
-      $("affName").textContent = sess.departmentName || "所属未設定";
+      $("affName").textContent = affLabel(sess);
       const keys = (sess.apps || []).filter((k) => APPS[k]); // 未知キーは無視
       const tiles = keys.map((k) => {
         const a = APPS[k];
