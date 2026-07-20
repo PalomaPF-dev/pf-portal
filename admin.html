@@ -372,7 +372,7 @@
         </div>
         <div class="msg err hidden" id="usersMsg"></div>
         <div class="note">
-          発行状況（パスワード設定状況）: <span class="badge b-created">設定済み</span>=パスワード設定済み / <span class="badge b-exists">未設定</span>=パスワード未設定 / <span class="badge b-plain">不明</span>=アプリから未取得（「状況更新」で再取得） / <span class="badge b-error">エラー</span>=連携失敗（アプリ側未対応・通信エラー等）。<br />
+          発行状況: <span class="badge b-created">連携済み</span>=アプリにアカウント連携済み（ポータルから自動ログイン可） / <span class="badge b-error">エラー</span>=連携失敗（「状況更新」で再連携。解消しない場合はアプリの更新状況を確認）。アプリ個別のパスワード設定は不要です（ポータルで一括ログイン）。<br />
           承認者を指定しない一般ユーザーは、所属する職場の管理者が承認者になります。<br />
           <strong>名簿から削除しても、各アプリ側のアカウントは削除されません。</strong>アプリ側のアカウント削除は各アプリの管理機能で行ってください。
         </div>
@@ -871,13 +871,11 @@
       users = Array.isArray(rows) ? rows : [];
     }
 
-    // パスワード設定状況のバッジ（発行状況はこれのみ表示・リンク表示は廃止）
-    // error → エラー / passwordSet true → 設定済み / false → 未設定 / null → 不明
+    // 発行状況のバッジ。ポータル一括ログイン（SSO）方式のためアプリ個別のパスワード
+    // 設定状況は表示しない。発行連携の成否（連携済み/エラー）のみを示す。
     function pwBadge(p) {
       if (p.status === "error") return { cls: "b-error", label: "エラー" };
-      if (p.passwordSet === true) return { cls: "b-created", label: "設定済み" };
-      if (p.passwordSet === false) return { cls: "b-exists", label: "未設定" };
-      return { cls: "b-plain", label: "不明" };
+      return { cls: "b-created", label: "連携済み" };
     }
 
     function provisionBadges(provisions) {
