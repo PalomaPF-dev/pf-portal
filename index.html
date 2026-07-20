@@ -248,6 +248,8 @@
       box-shadow: 0 1px 3px rgba(0,0,0,.04);
     }
     .note strong { color: var(--ink); }
+    .note .notelink { color: var(--red); text-decoration: underline; font-weight: 700; }
+    .note .notelink:hover { color: var(--red-deep); }
 
     footer.site {
       background: #fff; border-top: 1px solid var(--line);
@@ -360,8 +362,7 @@
         <div class="grid" id="appGrid"></div>
         <div class="note">
           <strong>ご利用にあたって</strong><br />
-          各アプリはポータルから<strong>自動でログイン</strong>されます（図面管理を除く）。うまく開けない場合は管理者にご連絡ください。<br />
-          iPhoneでは、Safariの共有メニューから<strong>「ホーム画面に追加」</strong>すると、このポータルや各アプリをアプリのように使えます。
+          各アプリはポータルから<strong>自動でログイン</strong>されます（図面管理を除く）。うまく開けない場合や不明な点は、<a class="notelink" href="mailto:info@paloma-pf.com">info@paloma-pf.com</a> までお問い合わせください。
         </div>
       </main>
     </section>
