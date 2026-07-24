@@ -10,7 +10,12 @@ const { provisionUsers } = require("../lib/provision");
 
 const LOGIN_ID_RE = /^[A-Za-z0-9_@.-]+$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const ROLES = ["admin", "member"];
+const ROLES = ["admin", "member", "worker"];
+
+// DB上のroleを表示用に正規化（未知の値は member 扱い）
+function normalizeRole(role) {
+  return role === "admin" ? "admin" : role === "worker" ? "worker" : "member";
+}
 
 // 承認者の解決: 本人の承認者指定 → その login_id、なければ職場の管理者 → その login_id、どちらも無ければ null。
 async function resolveApproverLoginId(sql, approverUserId, workplaceId) {
@@ -34,7 +39,7 @@ async function resolveApproverLoginId(sql, approverUserId, workplaceId) {
 // OK なら正規化済みの { role, workplaceId, approverUserId } を返し、NG なら res に 400 を書いて null を返す。
 async function validateRoleWorkplaceApprover(sql, res, { role, workplaceId, approverUserId, departmentId, selfId }) {
   if (!ROLES.includes(role)) {
-    res.status(400).json({ message: "権限は 管理者(admin) / 一般(member) のいずれかを指定してください" });
+    res.status(400).json({ message: "権限は 管理者(admin) / 一般(member) / 作業者(worker) のいずれかを指定してください" });
     return null;
   }
   if (workplaceId) {
@@ -108,7 +113,7 @@ module.exports = async (req, res) => {
           departmentId: u.department_id,
           departmentCode: u.department_code,
           departmentName: u.department_name,
-          role: u.role === "admin" ? "admin" : "member",
+          role: normalizeRole(u.role),
           workplaceId: u.workplace_id,
           workplaceCode: u.workplace_code,
           workplaceName: u.workplace_name,
@@ -215,7 +220,7 @@ module.exports = async (req, res) => {
       const email = body.email === undefined ? (prev.email || "") : String(body.email || "").trim();
       const departmentId = body.departmentId === undefined ? prev.department_id : body.departmentId;
       const workplaceId = body.workplaceId === undefined ? prev.workplace_id : (body.workplaceId || null);
-      const role = body.role === undefined ? (prev.role === "admin" ? "admin" : "member") : String(body.role || "");
+      const role = body.role === undefined ? normalizeRole(prev.role) : String(body.role || "");
       const approverUserId = body.approverUserId === undefined ? prev.approver_user_id : (body.approverUserId || null);
 
       if (!name || name.length > 100) {
