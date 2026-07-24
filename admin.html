@@ -397,8 +397,8 @@
         <div class="card">
           <h2>CSVファイルから一括登録</h2>
           <p style="font-size:12px;color:var(--sub);line-height:1.9">
-            1行目はヘッダー <b>社員番号,ユーザー名,部署コード,部署名,メール</b>（部署名・メールは任意）。文字コードは UTF-8 / Shift_JIS のどちらでも読み込めます。<br />
-            部署は<b>部署コード優先</b>で照合し、コードが空欄の行は部署名で照合します。登録済みの社員番号はスキップされます。権限は「一般」、職場・承認者は未設定で登録されます（登録後にユーザー設定の編集で変更できます）。
+            1行目はヘッダー <b>社員番号,ユーザー名,部署コード,部署名,職場コード,権限,メール</b>（部署名・職場コード・権限・メールは任意）。文字コードは UTF-8 / Shift_JIS のどちらでも読み込めます。<br />
+            部署は<b>部署コード優先</b>で照合し、コードが空欄の行は部署名で照合します。<b>職場コード</b>を入れるとその職場に配属します（指定した部署の配下である必要があります）。<b>権限</b>は 管理者 / 一般 / 作業者 のいずれか（空欄なら一般）。承認者は職場の管理者が自動で設定されます。登録済みの社員番号はスキップされます。
             <a href="#" class="plain" id="csvTemplate">テンプレートCSVをダウンロード</a>
           </p>
           <label class="f">CSVファイル</label>
@@ -411,7 +411,7 @@
           <div class="tblwrap">
             <table class="tbl">
               <thead>
-                <tr><th>#</th><th>社員番号</th><th>ユーザー名</th><th>部署コード</th><th>部署名</th><th>メール</th><th>チェック</th></tr>
+                <tr><th>#</th><th>社員番号</th><th>ユーザー名</th><th>部署コード</th><th>部署名</th><th>職場コード</th><th>権限</th><th>メール</th><th>チェック</th></tr>
               </thead>
               <tbody id="csvPreviewRows"></tbody>
             </table>
@@ -1248,16 +1248,30 @@
     });
 
     // ===== ③ CSV一括登録 =====
-    const CSV_HEADER = ["社員番号", "ユーザー名", "部署コード", "部署名", "メール"];
-    let csvRows = []; // [{loginId,name,departmentCode,departmentName,email}]
+    const CSV_HEADER = ["社員番号", "ユーザー名", "部署コード", "部署名", "職場コード", "権限", "メール"];
+    let csvRows = []; // [{loginId,name,departmentCode,departmentName,workplaceCode,role,email}]
     let csvResults = []; // 結果（rows + apps）
+
+    // CSV の権限表記 → API に渡す role。空欄は一般(member)。未知の値は null（プレビューでエラー表示）
+    const CSV_ROLES = {
+      "": "member",
+      admin: "admin", 管理者: "admin", 管理: "admin",
+      member: "member", 一般: "member", "一般ユーザー": "member", 利用者: "member",
+      worker: "worker", 作業者: "worker",
+    };
+    const ROLE_LABELS = { admin: "管理者", member: "一般", worker: "作業者" };
+    function csvRole(raw) {
+      const s = String(raw || "").trim();
+      return CSV_ROLES[s.toLowerCase()] || CSV_ROLES[s] || null;
+    }
 
     $("csvTemplate").addEventListener("click", (e) => {
       e.preventDefault();
       downloadCsv("portal-users-template.csv", [
         CSV_HEADER,
-        ["1001", "山田 太郎", "D001", "生産管理部", "taro@example.com"],
-        ["1002", "鈴木 花子", "D003", "", ""],
+        ["1001", "山田 太郎", "D001", "生産管理部", "W001", "管理者", "taro@example.com"],
+        ["1002", "鈴木 花子", "D003", "", "", "一般", ""],
+        ["1003", "佐藤 次郎", "D003", "", "W010", "作業者", ""],
       ]);
     });
 
@@ -1316,7 +1330,8 @@
 
     function toObjects(rows) {
       if (rows.length === 0) return [];
-      let idx = { loginId: 0, name: 1, code: 2, deptName: 3, email: 4 };
+      // 見出し行が無い場合の既定の並び（テンプレートと同じ順）
+      let idx = { loginId: 0, name: 1, code: 2, deptName: 3, wpCode: 4, role: 5, email: 6 };
       let start = 0;
       const head = rows[0].map((c) => String(c).trim());
       if (head.some((h) => h.includes("社員番号"))) {
@@ -1324,26 +1339,29 @@
         const find = (...keys) => head.findIndex((h) => keys.some((k) => h === k || h.includes(k)));
         const iLogin = find("社員番号");
         const iName = head.findIndex((h) => h === "ユーザー名" || h === "氏名" || (h.includes("ユーザー") && h.includes("名")));
-        const iCode = find("職場コード", "部署コード");
-        const iDept = head.findIndex((h) => (h === "職場名" || h === "職場" || h === "部署名" || h === "部署") && h !== "職場コード");
+        const iCode = find("部署コード");
+        // 部署名は「部署名/部署」を優先。旧CSVが部署の意味で使っていた「職場名/職場」も後方互換で拾う
+        let iDept = head.findIndex((h) => h === "部署名" || h === "部署");
+        if (iDept < 0) iDept = head.findIndex((h) => h === "職場名" || h === "職場");
+        const iWp = find("職場コード");
+        const iRole = find("権限", "区分", "役割");
         const iMail = find("メール", "mail", "email");
-        idx = {
-          loginId: iLogin >= 0 ? iLogin : 0,
-          name: iName >= 0 ? iName : 1,
-          code: iCode >= 0 ? iCode : 2,
-          deptName: iDept >= 0 ? iDept : 3,
-          email: iMail >= 0 ? iMail : 4,
-        };
+        // 見出し行がある場合は見つかった列だけを使う（-1 = その列は空扱い）。
+        // 列が無いときに既定の並びへ戻すと、列順を入れ替えたCSVで別の列を拾ってしまうため。
+        idx = { loginId: iLogin, name: iName, code: iCode, deptName: iDept, wpCode: iWp, role: iRole, email: iMail };
       }
+      const cell = (r, i) => (i >= 0 ? String(r[i] || "").trim() : "");
       const out = [];
       for (let i = start; i < rows.length; i++) {
         const r = rows[i];
         out.push({
-          loginId: String(r[idx.loginId] || "").trim(),
-          name: String(r[idx.name] || "").trim(),
-          departmentCode: String(r[idx.code] || "").trim(),
-          departmentName: String(r[idx.deptName] || "").trim(),
-          email: String(r[idx.email] || "").trim(),
+          loginId: cell(r, idx.loginId),
+          name: cell(r, idx.name),
+          departmentCode: cell(r, idx.code),
+          departmentName: cell(r, idx.deptName),
+          workplaceCode: cell(r, idx.wpCode),
+          role: cell(r, idx.role),
+          email: cell(r, idx.email),
         });
       }
       return out;
@@ -1360,9 +1378,18 @@
           ? departments.find((d) => d.name === r.departmentName)
           : null;
       if (!dept) return { ok: false, note: "部署が見つかりません" };
+      const role = csvRole(r.role);
+      if (!role) return { ok: false, note: "権限は 管理者 / 一般 / 作業者 のいずれかです" };
+      let wp = null;
+      if (r.workplaceCode) {
+        wp = workplaces.find((w) => String(w.code || "") === r.workplaceCode);
+        if (!wp) return { ok: false, note: "職場が見つかりません" };
+        if (wp.departmentId !== dept.id) return { ok: false, note: "職場「" + wp.name + "」は部署「" + dept.name + "」の配下ではありません" };
+      }
       if (seen.has(r.loginId)) return { ok: false, note: "ファイル内で社員番号が重複しています" };
       seen.add(r.loginId);
-      return { ok: true, note: "OK（" + (dept.code ? dept.code + " " : "") + dept.name + "）" };
+      const where = (dept.code ? dept.code + " " : "") + dept.name + (wp ? " › " + wp.name : "");
+      return { ok: true, note: "OK（" + where + "／" + ROLE_LABELS[role] + "）" };
     }
 
     $("csvFile").addEventListener("change", async () => {
@@ -1391,6 +1418,8 @@
             "<td>" + esc(r.name) + "</td>" +
             "<td>" + esc(r.departmentCode) + "</td>" +
             "<td>" + esc(r.departmentName) + "</td>" +
+            "<td>" + esc(r.workplaceCode) + "</td>" +
+            "<td>" + esc(ROLE_LABELS[csvRole(r.role)] || r.role || "一般") + "</td>" +
             "<td class=\"sub\">" + esc(r.email) + "</td>" +
             "<td>" + (chk.ok ? '<span class="badge b-created">' + esc(chk.note) + "</span>" : '<span class="badge b-error">' + esc(chk.note) + "</span>") + "</td>";
           return tr;
