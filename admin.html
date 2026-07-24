@@ -124,6 +124,7 @@
     .b-plain   { background: var(--soft); color: var(--sub); }
     .b-admin   { background: #fdecea; color: var(--red); }
     .b-manage  { background: #e3f2fd; color: #0b5ca8; }
+    .b-worker  { background: #e8f5e9; color: #1b7a3d; }
 
     .help { font-size: 11px; color: var(--sub); margin-top: 4px; line-height: 1.6; }
 
@@ -328,11 +329,12 @@
               <label class="f">権限</label>
               <select id="ufRole">
                 <option value="member">一般</option>
+                <option value="worker">作業者</option>
                 <option value="admin">管理者</option>
               </select>
             </div>
             <div id="ufApproverWrap">
-              <label class="f">承認者（任意・一般ユーザーのみ）</label>
+              <label class="f">承認者（任意・一般/作業者のみ）</label>
               <select id="ufApprover"></select>
             </div>
           </div>
@@ -1026,6 +1028,8 @@
         const tr = document.createElement("tr");
         const roleBadge = (u.role === "admin"
           ? '<span class="badge b-admin">管理者</span>'
+          : u.role === "worker"
+          ? '<span class="badge b-worker">作業者</span>'
           : '<span class="badge b-plain">一般</span>')
           + (u.canManage ? '<span class="badge b-manage">ポータル管理</span>' : "");
         // 職場は「部署コード › 職場コード」の階層で表示（名前はサブ行・tooltip）
@@ -1104,7 +1108,7 @@
       $("ufEmail").value = u.email || "";
       if (u.departmentId) $("ufDept").value = u.departmentId;
       renderUserWorkplaceSelect(u.workplaceId || "");
-      $("ufRole").value = u.role === "admin" ? "admin" : "member";
+      $("ufRole").value = u.role === "admin" ? "admin" : u.role === "worker" ? "worker" : "member";
       $("ufApproverWrap").classList.toggle("hidden", u.role === "admin");
       renderApproverSelect(u.approverUserId || "");
       // ポータル管理権限の付与 UI はマスターセッションのみ表示（サーバー側でも強制）
@@ -1144,7 +1148,8 @@
       const resBox = $("ufResult");
       msg.classList.add("hidden");
       resBox.classList.add("hidden");
-      const role = $("ufRole").value === "admin" ? "admin" : "member";
+      const roleValue = $("ufRole").value;
+      const role = roleValue === "admin" ? "admin" : roleValue === "worker" ? "worker" : "member";
       const payload = {
         loginId: $("ufLogin").value.trim(),
         name: $("ufName").value.trim(),
@@ -1152,7 +1157,7 @@
         departmentId: $("ufDept").value,
         workplaceId: $("ufWorkplace").value || null,
         role,
-        approverUserId: role === "member" ? ($("ufApprover").value || null) : null,
+        approverUserId: role !== "admin" ? ($("ufApprover").value || null) : null,
       };
       if ((!editingUserId && !payload.loginId) || !payload.name) {
         msg.textContent = "社員番号とユーザー名を入力してください";
