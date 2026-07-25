@@ -168,6 +168,31 @@
       font-size: 11px; letter-spacing: .08em; padding: 18px 12px; margin-top: 8px;
     }
     footer.site .c { opacity: .75; }
+    /* 回答入力モーダル（テーブル内では狭いため、広い画面で書けるようにする） */
+    .rov {
+      position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 60;
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    .rov.hidden { display: none; }
+    .rcard {
+      background: #fff; border-radius: 14px; width: 100%; max-width: 720px;
+      max-height: 90vh; overflow-y: auto; padding: 22px 24px;
+      box-shadow: 0 10px 40px rgba(0,0,0,.2);
+    }
+    .rcard h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+    .rmeta { font-size: 12px; color: var(--sub); line-height: 1.9; }
+    .rquote {
+      margin: 10px 0 16px; padding: 12px 14px; background: var(--soft);
+      border-radius: 10px; font-size: 13px; line-height: 1.9; white-space: pre-wrap;
+      max-height: 240px; overflow-y: auto;
+    }
+    .rcard label { display: block; font-size: 12px; color: var(--sub); font-weight: 600; margin-bottom: 6px; }
+    .rcard textarea {
+      width: 100%; font: inherit; font-size: 14px; line-height: 1.9; padding: 12px 14px;
+      border: 1px solid var(--line); border-radius: 10px; resize: vertical; min-height: 220px;
+    }
+    .rcard textarea:focus { outline: none; border-color: var(--red); box-shadow: 0 0 0 3px rgba(220,0,12,.08); }
+    .ractions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
   </style>
 </head>
 <body>
@@ -448,7 +473,7 @@
           <div class="tblwrap">
             <table class="tbl">
               <thead>
-                <tr><th>受付日時</th><th>分類</th><th>社員番号</th><th>氏名</th><th>内容</th><th>回答</th><th>状態</th></tr>
+                <tr><th>受付日時</th><th>対象アプリ</th><th>分類</th><th>社員番号</th><th>氏名</th><th>内容</th><th>回答</th><th>状態</th></tr>
               </thead>
               <tbody id="inqRows"></tbody>
             </table>
@@ -602,7 +627,7 @@
     async function loadInquiries() {
       const tb = $("inqRows");
       $("inqMsg").classList.add("hidden");
-      tb.innerHTML = '<tr><td colspan="7" style="color:var(--sub)">読み込み中…</td></tr>';
+      tb.innerHTML = '<tr><td colspan="8" style="color:var(--sub)">読み込み中…</td></tr>';
       try {
         const list = await api("/api/contact");
         const openCount = list.filter((x) => x.status !== "resolved").length;
@@ -610,7 +635,7 @@
         badge.textContent = String(openCount);
         badge.classList.toggle("hidden", openCount === 0);
         if (list.length === 0) {
-          tb.innerHTML = '<tr><td colspan="7" style="color:var(--sub)">お問い合わせはありません。</td></tr>';
+          tb.innerHTML = '<tr><td colspan="8" style="color:var(--sub)">お問い合わせはありません。</td></tr>';
           return;
         }
         const fmt = (v) => (v ? new Date(v).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "");
@@ -626,15 +651,17 @@
             ? '<div class="sub" style="font-size:11px;margin-bottom:4px">回答済み ' + fmt(x.repliedAt) +
               (x.readAt ? '<span style="color:var(--sub)">・既読 ' + fmt(x.readAt) + "</span>" : '<b style="color:var(--red)">・未読</b>') + "</div>"
             : "";
+          // 回答本文は広い画面で書けるようモーダルで編集する（一覧では抜粋のみ表示）
+          const excerpt = x.reply
+            ? '<div style="white-space:pre-wrap;font-size:12px;line-height:1.8;max-height:96px;overflow:hidden">' + escHtml(x.reply) + "</div>"
+            : '<div class="sub" style="font-size:12px">未回答</div>';
           const reply =
-            replyInfo +
-            '<textarea class="inq-reply" data-id="' + x.id + '" rows="3" placeholder="回答を入力…" ' +
-            'style="width:100%;min-width:220px;font:inherit;font-size:12px;padding:6px;border:1px solid var(--line);border-radius:6px">' +
-            escHtml(x.reply || "") + "</textarea>" +
-            '<button class="primary inq-send" data-id="' + x.id + '" style="font-size:11px;margin:4px 0 0">' +
-            (x.reply ? "回答を更新" : "回答を送信") + "</button>";
+            replyInfo + excerpt +
+            '<button class="' + (x.reply ? "ghost" : "primary") + ' inq-open" data-id="' + x.id + '" style="font-size:11px;margin:6px 0 0">' +
+            (x.reply ? "回答を編集" : "回答を書く") + "</button>";
           return '<tr style="' + (resolved ? "opacity:.75" : "") + '">' +
             '<td style="white-space:nowrap">' + dt + '</td>' +
+            '<td style="white-space:nowrap"><b>' + escHtml(x.appName || "ポータル全体・その他") + '</b></td>' +
             '<td style="white-space:nowrap">' + escHtml(x.category) + '</td>' +
             '<td>' + escHtml(x.loginId) + '</td>' +
             '<td>' + escHtml(x.name) + '</td>' +
@@ -643,27 +670,8 @@
             '<td style="white-space:nowrap">' + state + '<br />' + btn + '</td>' +
             '</tr>';
         }).join("");
-        tb.querySelectorAll(".inq-send").forEach((b) => {
-          b.addEventListener("click", async () => {
-            const ta = tb.querySelector('.inq-reply[data-id="' + b.dataset.id + '"]');
-            const reply = ta ? ta.value.trim() : "";
-            if (!reply) {
-              $("inqMsg").textContent = "回答内容を入力してください";
-              $("inqMsg").classList.remove("hidden");
-              return;
-            }
-            b.disabled = true;
-            b.textContent = "送信中…";
-            try {
-              await api("/api/contact", { method: "PATCH", body: JSON.stringify({ id: b.dataset.id, reply }) });
-              await loadInquiries();
-            } catch (e) {
-              b.disabled = false;
-              b.textContent = "回答を送信";
-              $("inqMsg").textContent = e.message || "回答の送信に失敗しました";
-              $("inqMsg").classList.remove("hidden");
-            }
-          });
+        tb.querySelectorAll(".inq-open").forEach((b) => {
+          b.addEventListener("click", () => openReply(list.find((x) => x.id === b.dataset.id)));
         });
         tb.querySelectorAll(".inq-toggle").forEach((b) => {
           b.addEventListener("click", async () => {
@@ -685,6 +693,52 @@
       }
     }
     $("inqReload").addEventListener("click", loadInquiries);
+
+    // ===== 回答入力モーダル =====
+    let replyTarget = null;
+    function openReply(x) {
+      if (!x) return;
+      replyTarget = x;
+      const fmt = (v) => (v ? new Date(v).toLocaleString("ja-JP") : "");
+      $("rMeta").innerHTML =
+        "<b>" + escHtml(x.appName || "ポータル全体・その他") + "</b>　" + escHtml(x.category) + "<br />" +
+        escHtml(x.name) + "（" + escHtml(x.loginId) + "）　" + fmt(x.createdAt) +
+        (x.reply ? "<br />回答済み " + fmt(x.repliedAt) + (x.readAt ? "・既読 " + fmt(x.readAt) : "・未読") : "");
+      $("rQuote").textContent = x.message;
+      $("rText").value = x.reply || "";
+      $("rSend").textContent = x.reply ? "回答を更新" : "回答を送信";
+      $("rSend").disabled = false;
+      $("rMsg").classList.add("hidden");
+      $("replyModal").classList.remove("hidden");
+      $("rText").focus();
+    }
+    function closeReply() { $("replyModal").classList.add("hidden"); replyTarget = null; }
+    $("rCancel").addEventListener("click", closeReply);
+    $("replyModal").addEventListener("click", (e) => { if (e.target === $("replyModal")) closeReply(); });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !$("replyModal").classList.contains("hidden")) closeReply();
+    });
+    $("rSend").addEventListener("click", async () => {
+      if (!replyTarget) return;
+      const reply = $("rText").value.trim();
+      if (!reply) {
+        $("rMsg").textContent = "回答内容を入力してください";
+        $("rMsg").classList.remove("hidden");
+        return;
+      }
+      $("rSend").disabled = true;
+      $("rSend").textContent = "送信中…";
+      try {
+        await api("/api/contact", { method: "PATCH", body: JSON.stringify({ id: replyTarget.id, reply }) });
+        closeReply();
+        await loadInquiries();
+      } catch (e) {
+        $("rSend").disabled = false;
+        $("rSend").textContent = "回答を送信";
+        $("rMsg").textContent = e.message || "回答の送信に失敗しました";
+        $("rMsg").classList.remove("hidden");
+      }
+    });
 
     // ===== ① 部署設定 =====
     let editingDeptId = null;
@@ -1535,5 +1589,21 @@
 
     init();
   </script>
+  <!-- 回答入力モーダル -->
+  <div class="rov hidden" id="replyModal">
+    <div class="rcard">
+      <h3>お問い合わせへの回答</h3>
+      <div class="rmeta" id="rMeta"></div>
+      <div class="rquote" id="rQuote"></div>
+      <label for="rText">回答内容（送信すると相手のポータルに表示され、メールでも通知されます）</label>
+      <textarea id="rText" rows="12" placeholder="回答を入力…" maxlength="4000"></textarea>
+      <div class="msg err hidden" id="rMsg" style="margin-top:10px"></div>
+      <div class="ractions">
+        <button class="ghost" id="rCancel" type="button">キャンセル</button>
+        <button class="primary" id="rSend" type="button">回答を送信</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
