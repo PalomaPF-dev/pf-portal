@@ -1,5 +1,5 @@
 // お問い合わせフォーム受付。
-//   POST（一般・要ログイン）: {category, loginId, name, message, website?}
+//   POST（一般・要ログイン）: {app?, category, loginId, name, message, website?}
 //     → pf_portal_inquiries に保存。RESEND_API_KEY があれば info@ へ通知メールも送る（任意）。
 //     website はハニーポット（値があれば送信扱いで無視）。レート制限: 同一IP 10分5回。
 //   GET（管理者）: 一覧を返す（status=open を上位）。
@@ -20,6 +20,21 @@ const CATEGORIES = [
   "機能の要望・改善",
   "その他",
 ];
+
+// 対象アプリ（index.html の APPS と同じキー）。表示名は管理画面と通知メールで使う。
+// 空文字・未知のキーは「ポータル全体・その他」扱いで NULL 保存する。
+const APP_NAMES = {
+  keikaku: "生産計画", nippou: "生産日報", sekisai: "出荷積載", zumen: "図面管理",
+  keisoku: "計測機器", setsubi: "設備管理", hinshitsu: "品質管理", zaiko: "在庫管理",
+  kanagata: "型管理", hoju: "補充計画", tenchu: "転注管理",
+};
+function normalizeApp(v) {
+  const k = String(v || "").trim();
+  return APP_NAMES[k] ? k : null;
+}
+function appLabel(k) {
+  return APP_NAMES[k] || "ポータル全体・その他";
+}
 
 const RL = new Map();
 function rateLimited(ip) {
@@ -42,9 +57,10 @@ async function sendMail(inq) {
       body: JSON.stringify({
         from: process.env.CONTACT_FROM || "業務ポータル <noreply@paloma-pf.com>",
         to: ["info@paloma-pf.com"],
-        subject: "【業務ポータル】お問い合わせ（" + inq.category + "）",
+        subject: "【業務ポータル】お問い合わせ（" + appLabel(inq.app) + "／" + inq.category + "）",
         text:
           "業務ポータルのお問い合わせフォームに新しい投稿がありました。\n\n" +
+          "対象アプリ: " + appLabel(inq.app) + "\n" +
           "分類: " + inq.category + "\n" +
           "社員番号: " + inq.loginId + "\n" +
           "氏名: " + inq.name + "\n" +
@@ -67,7 +83,7 @@ async function sendReplyMail(sql, inq) {
     const rows = await sql`SELECT email FROM pf_portal_users WHERE login_id = ${inq.login_id} LIMIT 1`;
     const to = rows[0] && rows[0].email ? String(rows[0].email).trim() : "";
     if (!to) return;
-    const origin = (process.env.PORTAL_ORIGIN || "https://paloma-pf.com").replace(/\/+$/, "");
+    const origin = (process.env.PORTAL_ORIGIN || "https://portal.paloma-pf.com").replace(/\/+$/, "");
     await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
@@ -78,6 +94,7 @@ async function sendReplyMail(sql, inq) {
         text:
           inq.name + " さん\n\n" +
           "お問い合わせいただいた件について回答しました。\n\n" +
+          "対象アプリ: " + appLabel(inq.app) + "\n" +
           "分類: " + inq.category + "\n" +
           "お問い合わせ内容:\n" + inq.message + "\n\n" +
           "―――― 回答 ――――\n" + inq.reply + "\n\n" +
@@ -105,14 +122,14 @@ module.exports = async (req, res) => {
       const session = verifyUserSession(req);
       if (!session) { res.status(401).json({ message: "ログインが必要です" }); return; }
       const rows = await sql`
-        SELECT id, category, message, status, reply, replied_at, read_at, created_at
+        SELECT id, app, category, message, status, reply, replied_at, read_at, created_at
         FROM pf_portal_inquiries
         WHERE login_id = ${session.loginId}
         ORDER BY created_at DESC
         LIMIT 100`;
       res.status(200).json({
         items: rows.map((r) => ({
-          id: r.id, category: r.category, message: r.message, status: r.status,
+          id: r.id, app: r.app, appName: appLabel(r.app), category: r.category, message: r.message, status: r.status,
           reply: r.reply, repliedAt: r.replied_at, readAt: r.read_at, createdAt: r.created_at,
         })),
         // 未読の回答件数（ポータルの「回答が届いています」表示に使う）
@@ -125,12 +142,12 @@ module.exports = async (req, res) => {
     if (req.method === "GET") {
       if (!requireManage(req, res)) return;
       const rows = await sql`
-        SELECT id, category, login_id, name, message, status, reply, replied_at, read_at, created_at
+        SELECT id, app, category, login_id, name, message, status, reply, replied_at, read_at, created_at
         FROM pf_portal_inquiries
         ORDER BY (status = 'open') DESC, created_at DESC
         LIMIT 500`;
       res.status(200).json(rows.map((r) => ({
-        id: r.id, category: r.category, loginId: r.login_id, name: r.name,
+        id: r.id, app: r.app, appName: appLabel(r.app), category: r.category, loginId: r.login_id, name: r.name,
         message: r.message, status: r.status, createdAt: r.created_at,
         reply: r.reply, repliedAt: r.replied_at, readAt: r.read_at,
       })));
@@ -169,7 +186,7 @@ module.exports = async (req, res) => {
           UPDATE pf_portal_inquiries
           SET reply = ${reply}, replied_at = now(), read_at = NULL, status = 'resolved'
           WHERE id = ${id}
-          RETURNING id, category, login_id, name, message, reply, replied_at, status`;
+          RETURNING id, app, category, login_id, name, message, reply, replied_at, status`;
         if (r.length === 0) { res.status(404).json({ message: "見つかりません" }); return; }
         await sendReplyMail(sql, r[0]);
         res.status(200).json({ ok: true, status: r[0].status, repliedAt: r[0].replied_at });
@@ -213,10 +230,11 @@ module.exports = async (req, res) => {
     if (!message) { res.status(400).json({ message: "お問い合わせ内容を入力してください" }); return; }
     if (message.length > 2000) { res.status(400).json({ message: "内容は2000文字以内で入力してください" }); return; }
 
+    const app = normalizeApp(body.app);
     await sql`
-      INSERT INTO pf_portal_inquiries (category, login_id, name, message)
-      VALUES (${category}, ${loginId}, ${name}, ${message})`;
-    await sendMail({ category, loginId, name, message });
+      INSERT INTO pf_portal_inquiries (app, category, login_id, name, message)
+      VALUES (${app}, ${category}, ${loginId}, ${name}, ${message})`;
+    await sendMail({ app, category, loginId, name, message });
     res.status(200).json({ ok: true });
   } catch (e) {
     console.error("[contact]", e);
