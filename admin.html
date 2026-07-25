@@ -485,6 +485,22 @@
 
   <footer class="site"><span class="c">株式会社パロマ 生産・調達統括本部</span></footer>
 
+  <!-- 回答入力モーダル -->
+  <div class="rov hidden" id="replyModal">
+    <div class="rcard">
+      <h3>お問い合わせへの回答</h3>
+      <div class="rmeta" id="rMeta"></div>
+      <div class="rquote" id="rQuote"></div>
+      <label for="rText">回答内容（送信すると相手のポータルに表示され、メールでも通知されます）</label>
+      <textarea id="rText" rows="12" placeholder="回答を入力…" maxlength="4000"></textarea>
+      <div class="msg err hidden" id="rMsg" style="margin-top:10px"></div>
+      <div class="ractions">
+        <button class="ghost" id="rCancel" type="button">キャンセル</button>
+        <button class="primary" id="rSend" type="button">回答を送信</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // ===== アプリ定義（ポータルの index.html と同じキー） =====
     const APPS = {
@@ -1589,21 +1605,5 @@
 
     init();
   </script>
-  <!-- 回答入力モーダル -->
-  <div class="rov hidden" id="replyModal">
-    <div class="rcard">
-      <h3>お問い合わせへの回答</h3>
-      <div class="rmeta" id="rMeta"></div>
-      <div class="rquote" id="rQuote"></div>
-      <label for="rText">回答内容（送信すると相手のポータルに表示され、メールでも通知されます）</label>
-      <textarea id="rText" rows="12" placeholder="回答を入力…" maxlength="4000"></textarea>
-      <div class="msg err hidden" id="rMsg" style="margin-top:10px"></div>
-      <div class="ractions">
-        <button class="ghost" id="rCancel" type="button">キャンセル</button>
-        <button class="primary" id="rSend" type="button">回答を送信</button>
-      </div>
-    </div>
-  </div>
-
 </body>
 </html>
