@@ -396,6 +396,11 @@
             <button type="button" id="viewList">リスト</button>
           </div>
         </div>
+        <!-- 管理者から回答が届いたときのお知らせ（未読があるときだけ表示） -->
+        <div class="note hidden" id="replyNote" style="margin: 0 0 16px; border-color: #1f7a4d; background: #f0fbf5">
+          <strong>お問い合わせに回答が届いています</strong>（<span id="replyCount">0</span>件）<br />
+          <button type="button" class="notelink" id="openReplies">回答を確認する</button>
+        </div>
         <div class="note hidden" id="noDeptNote" style="margin: 0 0 16px">
           <strong>表示できるアプリがありません</strong><br />
           所属部署が設定されていないか、部署にアプリが割り当てられていません。管理者にお問い合わせください。
@@ -403,7 +408,8 @@
         <div class="grid" id="appGrid"></div>
         <div class="note">
           <strong>ご利用にあたって</strong><br />
-          各アプリはポータルから<strong>自動でログイン</strong>されます（図面管理を除く）。うまく開けない場合や不明な点は、<button type="button" class="notelink" id="openContact">お問い合わせフォーム</button>からご連絡ください。
+          各アプリはポータルから<strong>自動でログイン</strong>されます（図面管理を除く）。うまく開けない場合や不明な点は、<button type="button" class="notelink" id="openContact">お問い合わせフォーム</button>からご連絡ください。<br />
+          過去のお問い合わせと回答は<button type="button" class="notelink" id="openHistory">お問い合わせ履歴</button>で確認できます。
         </div>
       </main>
     </section>
@@ -442,6 +448,18 @@
           <button type="submit" class="mbtn-send" id="cSend">送信する</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- お問い合わせ履歴・回答モーダル -->
+  <div class="modal-ov hidden" id="historyModal">
+    <div class="modal-card">
+      <h3>お問い合わせ履歴</h3>
+      <p class="mlead">これまでのお問い合わせと、担当者からの回答です。</p>
+      <div id="historyList" style="max-height:60vh;overflow-y:auto"></div>
+      <div class="modal-actions">
+        <button type="button" class="mbtn-close" id="hClose">閉じる</button>
+      </div>
     </div>
   </div>
 
@@ -530,6 +548,7 @@
       setHeaderUser(sess);
       renderApps(sess);
       showView("apps");
+      loadMyInquiries();
     }
 
     // ===== 表示設定（カード / リスト） =====
@@ -585,9 +604,10 @@
           category: $("cCat").value, loginId, name, message, website: $("cHp").value,
         });
         if (ok) {
-          cShowMsg("送信しました。担当者からの連絡をお待ちください。", "ok");
+          cShowMsg("送信しました。回答はこの画面の「お問い合わせ履歴」で確認できます。", "ok");
           $("cMsg").value = "";
-          setTimeout(closeContact, 1800);
+          loadMyInquiries();
+          setTimeout(closeContact, 2200);
         } else if (status === 401) {
           cShowMsg("セッションが切れています。お手数ですが再度ログインしてください。", "err");
         } else {
@@ -599,6 +619,75 @@
         $("cSend").disabled = false;
       }
     });
+
+    // ===== お問い合わせ履歴・回答 =====
+    let myInquiries = [];
+
+    function escText(s) {
+      return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+    function fmtDt(v) {
+      return v ? new Date(v).toLocaleString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+    }
+
+    // 未読の回答があればお知らせを出す。取得失敗時は何もしない（アプリ一覧の表示は妨げない）。
+    async function loadMyInquiries() {
+      try {
+        const r = await fetch("/api/contact?mine=1", { headers: { Accept: "application/json" } });
+        if (!r.ok) return;
+        const d = await r.json();
+        myInquiries = Array.isArray(d.items) ? d.items : [];
+        const unread = Number(d.unread) || 0;
+        $("replyCount").textContent = String(unread);
+        $("replyNote").classList.toggle("hidden", unread === 0);
+      } catch {}
+    }
+
+    function renderHistory() {
+      const box = $("historyList");
+      if (myInquiries.length === 0) {
+        box.innerHTML = '<p class="mlead">お問い合わせはまだありません。</p>';
+        return;
+      }
+      box.innerHTML = myInquiries.map((x) => {
+        const unread = x.reply && !x.readAt;
+        const reply = x.reply
+          ? '<div style="margin-top:8px;padding:10px;border-radius:8px;background:#f0fbf5;border:1px solid #cfe9db">' +
+            '<div style="font-size:12px;color:#1f7a4d;font-weight:700;margin-bottom:4px">回答' +
+            (unread ? '<span style="margin-left:6px;background:#1f7a4d;color:#fff;border-radius:4px;padding:1px 6px;font-size:11px">NEW</span>' : "") +
+            '<span style="float:right;font-weight:400;color:var(--sub, #667)">' + fmtDt(x.repliedAt) + "</span></div>" +
+            '<div style="white-space:pre-wrap;font-size:13px;line-height:1.8">' + escText(x.reply) + "</div></div>"
+          : '<div style="margin-top:8px;font-size:12px;color:var(--sub, #667)">担当者が確認中です。しばらくお待ちください。</div>';
+        return '<div style="padding:12px 0;border-bottom:1px solid #e6e8ee">' +
+          '<div style="font-size:12px;color:var(--sub, #667)">' + fmtDt(x.createdAt) + "　" + escText(x.category) + "</div>" +
+          '<div style="white-space:pre-wrap;font-size:13px;line-height:1.8;margin-top:4px">' + escText(x.message) + "</div>" +
+          reply + "</div>";
+      }).join("");
+    }
+
+    // 履歴を開いたら、表示した回答を既読にする（お知らせは次回から消える）
+    async function openHistory() {
+      await loadMyInquiries();
+      renderHistory();
+      $("historyModal").classList.remove("hidden");
+      const unread = myInquiries.filter((x) => x.reply && !x.readAt);
+      if (unread.length === 0) return;
+      try {
+        await Promise.all(unread.map((x) =>
+          fetch("/api/contact?mine=1", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: x.id }),
+          })));
+        $("replyNote").classList.add("hidden");
+      } catch {}
+    }
+    function closeHistory() { $("historyModal").classList.add("hidden"); }
+    $("openHistory").addEventListener("click", openHistory);
+    $("openReplies").addEventListener("click", openHistory);
+    $("hClose").addEventListener("click", closeHistory);
+    $("historyModal").addEventListener("click", (e) => { if (e.target === $("historyModal")) closeHistory(); });
 
     // 各アプリカード上に「承認待ち」バッジを表示（表示中アプリのみ）。取得失敗時は何もしない。
     function loadApprovals(appKeys) {

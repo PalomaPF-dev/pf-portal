@@ -3,7 +3,10 @@
 //     → pf_portal_inquiries に保存。RESEND_API_KEY があれば info@ へ通知メールも送る（任意）。
 //     website はハニーポット（値があれば送信扱いで無視）。レート制限: 同一IP 10分5回。
 //   GET（管理者）: 一覧を返す（status=open を上位）。
+//   GET ?mine=1（本人・要ログイン）: 自分の問い合わせと回答の一覧。
 //   PATCH（管理者）: {id, status:"open"|"resolved"} で対応状態を更新。
+//                    {id, reply} で回答を保存（回答すると自動で対応済み＋本人は未読になる）。
+//   PATCH ?mine=1（本人）: {id} で自分の回答を既読にする。
 const { requireSql, ensureSchema, readBody, isUuid } = require("../lib/db");
 const { verifyUserSession } = require("../lib/portalAuth");
 const { requireManage } = require("../lib/portalAuth");
@@ -55,35 +58,125 @@ async function sendMail(inq) {
   }
 }
 
+// 回答を書いたことを本人へメールで知らせる（メール未設定・アドレス未登録なら何もしない）。
+// 保存自体は成功させたいので、失敗しても例外は投げない。
+async function sendReplyMail(sql, inq) {
+  const key = (process.env.RESEND_API_KEY || "").trim();
+  if (!key) return;
+  try {
+    const rows = await sql`SELECT email FROM pf_portal_users WHERE login_id = ${inq.login_id} LIMIT 1`;
+    const to = rows[0] && rows[0].email ? String(rows[0].email).trim() : "";
+    if (!to) return;
+    const origin = (process.env.PORTAL_ORIGIN || "https://paloma-pf.com").replace(/\/+$/, "");
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: process.env.CONTACT_FROM || "業務ポータル <noreply@paloma-pf.com>",
+        to: [to],
+        subject: "【業務ポータル】お問い合わせへの回答",
+        text:
+          inq.name + " さん\n\n" +
+          "お問い合わせいただいた件について回答しました。\n\n" +
+          "分類: " + inq.category + "\n" +
+          "お問い合わせ内容:\n" + inq.message + "\n\n" +
+          "―――― 回答 ――――\n" + inq.reply + "\n\n" +
+          "業務ポータル（" + origin + "）にログインすると、いつでも確認できます。",
+        ...(process.env.MAIL_REPLY_TO ? { reply_to: process.env.MAIL_REPLY_TO.trim() } : {}),
+      }),
+    });
+  } catch (e) {
+    console.warn("[contact] reply mail failed:", e && e.message);
+  }
+}
+
 module.exports = async (req, res) => {
   const sql = requireSql(res);
   if (!sql) return;
 
+  // ?mine=1 は「本人が自分の問い合わせを見る／既読にする」経路（管理者権限は不要）
+  const mine = /[?&]mine=1(&|$)/.test(String(req.url || ""));
+
   try {
     await ensureSchema(sql);
+
+    // ===== 自分の問い合わせと回答（本人・要ログイン） =====
+    if (req.method === "GET" && mine) {
+      const session = verifyUserSession(req);
+      if (!session) { res.status(401).json({ message: "ログインが必要です" }); return; }
+      const rows = await sql`
+        SELECT id, category, message, status, reply, replied_at, read_at, created_at
+        FROM pf_portal_inquiries
+        WHERE login_id = ${session.loginId}
+        ORDER BY created_at DESC
+        LIMIT 100`;
+      res.status(200).json({
+        items: rows.map((r) => ({
+          id: r.id, category: r.category, message: r.message, status: r.status,
+          reply: r.reply, repliedAt: r.replied_at, readAt: r.read_at, createdAt: r.created_at,
+        })),
+        // 未読の回答件数（ポータルの「回答が届いています」表示に使う）
+        unread: rows.filter((r) => r.reply && !r.read_at).length,
+      });
+      return;
+    }
 
     // ===== 一覧（管理者） =====
     if (req.method === "GET") {
       if (!requireManage(req, res)) return;
       const rows = await sql`
-        SELECT id, category, login_id, name, message, status, created_at
+        SELECT id, category, login_id, name, message, status, reply, replied_at, read_at, created_at
         FROM pf_portal_inquiries
         ORDER BY (status = 'open') DESC, created_at DESC
         LIMIT 500`;
       res.status(200).json(rows.map((r) => ({
         id: r.id, category: r.category, loginId: r.login_id, name: r.name,
         message: r.message, status: r.status, createdAt: r.created_at,
+        reply: r.reply, repliedAt: r.replied_at, readAt: r.read_at,
       })));
       return;
     }
 
-    // ===== 対応状態の更新（管理者） =====
+    // ===== 回答を既読にする（本人） =====
+    if (req.method === "PATCH" && mine) {
+      const session = verifyUserSession(req);
+      if (!session) { res.status(401).json({ message: "ログインが必要です" }); return; }
+      const body = readBody(req);
+      const id = body.id;
+      if (!isUuid(id)) { res.status(400).json({ message: "IDが不正です" }); return; }
+      // 自分の問い合わせ以外は更新できないよう login_id も条件に入れる
+      await sql`
+        UPDATE pf_portal_inquiries
+        SET read_at = now()
+        WHERE id = ${id} AND login_id = ${session.loginId} AND reply IS NOT NULL AND read_at IS NULL`;
+      res.status(200).json({ ok: true });
+      return;
+    }
+
+    // ===== 回答の保存・対応状態の更新（管理者） =====
     if (req.method === "PATCH") {
       if (!requireManage(req, res)) return;
       const body = readBody(req);
       const id = body.id;
-      const status = body.status === "resolved" ? "resolved" : "open";
       if (!isUuid(id)) { res.status(400).json({ message: "IDが不正です" }); return; }
+
+      // reply が含まれていれば回答の保存。回答すると対応済みにし、本人には未読として届ける。
+      if (Object.prototype.hasOwnProperty.call(body, "reply")) {
+        const reply = String(body.reply == null ? "" : body.reply).trim();
+        if (!reply) { res.status(400).json({ message: "回答内容を入力してください" }); return; }
+        if (reply.length > 4000) { res.status(400).json({ message: "回答は4000文字以内で入力してください" }); return; }
+        const r = await sql`
+          UPDATE pf_portal_inquiries
+          SET reply = ${reply}, replied_at = now(), read_at = NULL, status = 'resolved'
+          WHERE id = ${id}
+          RETURNING id, category, login_id, name, message, reply, replied_at, status`;
+        if (r.length === 0) { res.status(404).json({ message: "見つかりません" }); return; }
+        await sendReplyMail(sql, r[0]);
+        res.status(200).json({ ok: true, status: r[0].status, repliedAt: r[0].replied_at });
+        return;
+      }
+
+      const status = body.status === "resolved" ? "resolved" : "open";
       const r = await sql`UPDATE pf_portal_inquiries SET status = ${status} WHERE id = ${id} RETURNING id`;
       if (r.length === 0) { res.status(404).json({ message: "見つかりません" }); return; }
       res.status(200).json({ ok: true, status });

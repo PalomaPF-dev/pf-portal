@@ -442,13 +442,13 @@
             <button class="ghost" id="inqReload" type="button" style="margin:0 0 0 auto;font-size:12px">再読み込み</button>
           </div>
           <p style="font-size:12px;color:var(--sub);line-height:1.9;margin-top:8px">
-            ポータルのお問い合わせフォームから届いた内容です。対応が済んだものは「対応済みにする」で下部へ移動します。
+            ポータルのお問い合わせフォームから届いた内容です。<b>回答を入力して「回答を送信」</b>すると、送信した方のポータルに回答が表示されます（メールアドレスが登録されていればメールでもお知らせします）。回答すると自動で対応済みになります。
           </p>
           <div class="msg err hidden" id="inqMsg"></div>
           <div class="tblwrap">
             <table class="tbl">
               <thead>
-                <tr><th>受付日時</th><th>分類</th><th>社員番号</th><th>氏名</th><th>内容</th><th>状態</th></tr>
+                <tr><th>受付日時</th><th>分類</th><th>社員番号</th><th>氏名</th><th>内容</th><th>回答</th><th>状態</th></tr>
               </thead>
               <tbody id="inqRows"></tbody>
             </table>
@@ -602,7 +602,7 @@
     async function loadInquiries() {
       const tb = $("inqRows");
       $("inqMsg").classList.add("hidden");
-      tb.innerHTML = '<tr><td colspan="6" style="color:var(--sub)">読み込み中…</td></tr>';
+      tb.innerHTML = '<tr><td colspan="7" style="color:var(--sub)">読み込み中…</td></tr>';
       try {
         const list = await api("/api/contact");
         const openCount = list.filter((x) => x.status !== "resolved").length;
@@ -610,25 +610,61 @@
         badge.textContent = String(openCount);
         badge.classList.toggle("hidden", openCount === 0);
         if (list.length === 0) {
-          tb.innerHTML = '<tr><td colspan="6" style="color:var(--sub)">お問い合わせはありません。</td></tr>';
+          tb.innerHTML = '<tr><td colspan="7" style="color:var(--sub)">お問い合わせはありません。</td></tr>';
           return;
         }
+        const fmt = (v) => (v ? new Date(v).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "");
         tb.innerHTML = list.map((x) => {
-          const dt = x.createdAt ? new Date(x.createdAt).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+          const dt = fmt(x.createdAt);
           const resolved = x.status === "resolved";
           const btn = resolved
             ? '<button class="ghost inq-toggle" data-id="' + x.id + '" data-to="open" style="font-size:11px;margin:0">未対応に戻す</button>'
             : '<button class="primary inq-toggle" data-id="' + x.id + '" data-to="resolved" style="font-size:11px;margin:0">対応済みにする</button>';
           const state = resolved ? '<span class="sub">対応済み</span>' : '<b style="color:var(--red)">未対応</b>';
-          return '<tr style="' + (resolved ? "opacity:.6" : "") + '">' +
+          // 回答済みなら「いつ回答したか／本人が読んだか」を出し、書き直しもできるようにする
+          const replyInfo = x.reply
+            ? '<div class="sub" style="font-size:11px;margin-bottom:4px">回答済み ' + fmt(x.repliedAt) +
+              (x.readAt ? '<span style="color:var(--sub)">・既読 ' + fmt(x.readAt) + "</span>" : '<b style="color:var(--red)">・未読</b>') + "</div>"
+            : "";
+          const reply =
+            replyInfo +
+            '<textarea class="inq-reply" data-id="' + x.id + '" rows="3" placeholder="回答を入力…" ' +
+            'style="width:100%;min-width:220px;font:inherit;font-size:12px;padding:6px;border:1px solid var(--line);border-radius:6px">' +
+            escHtml(x.reply || "") + "</textarea>" +
+            '<button class="primary inq-send" data-id="' + x.id + '" style="font-size:11px;margin:4px 0 0">' +
+            (x.reply ? "回答を更新" : "回答を送信") + "</button>";
+          return '<tr style="' + (resolved ? "opacity:.75" : "") + '">' +
             '<td style="white-space:nowrap">' + dt + '</td>' +
             '<td style="white-space:nowrap">' + escHtml(x.category) + '</td>' +
             '<td>' + escHtml(x.loginId) + '</td>' +
             '<td>' + escHtml(x.name) + '</td>' +
-            '<td style="white-space:pre-wrap;max-width:340px">' + escHtml(x.message) + '</td>' +
+            '<td style="white-space:pre-wrap;max-width:300px">' + escHtml(x.message) + '</td>' +
+            '<td style="min-width:240px">' + reply + '</td>' +
             '<td style="white-space:nowrap">' + state + '<br />' + btn + '</td>' +
             '</tr>';
         }).join("");
+        tb.querySelectorAll(".inq-send").forEach((b) => {
+          b.addEventListener("click", async () => {
+            const ta = tb.querySelector('.inq-reply[data-id="' + b.dataset.id + '"]');
+            const reply = ta ? ta.value.trim() : "";
+            if (!reply) {
+              $("inqMsg").textContent = "回答内容を入力してください";
+              $("inqMsg").classList.remove("hidden");
+              return;
+            }
+            b.disabled = true;
+            b.textContent = "送信中…";
+            try {
+              await api("/api/contact", { method: "PATCH", body: JSON.stringify({ id: b.dataset.id, reply }) });
+              await loadInquiries();
+            } catch (e) {
+              b.disabled = false;
+              b.textContent = "回答を送信";
+              $("inqMsg").textContent = e.message || "回答の送信に失敗しました";
+              $("inqMsg").classList.remove("hidden");
+            }
+          });
+        });
         tb.querySelectorAll(".inq-toggle").forEach((b) => {
           b.addEventListener("click", async () => {
             b.disabled = true;
