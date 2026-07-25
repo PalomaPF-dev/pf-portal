@@ -169,11 +169,13 @@
     }
     footer.site .c { opacity: .75; }
     /* 一覧のユーザー名（クリックで詳細） */
+    /* 一覧のユーザー名。赤は強すぎるので通常の文字色にし、下線でクリックできることを示す */
     button.ulink {
-      background: none; border: none; padding: 0; font: inherit; color: var(--red);
-      cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+      background: none; border: none; padding: 0; font: inherit; color: var(--ink);
+      cursor: pointer; text-decoration: underline; text-decoration-color: #bbb;
+      text-underline-offset: 3px;
     }
-    button.ulink:hover { opacity: .75; }
+    button.ulink:hover { color: var(--red); text-decoration-color: var(--red); }
     /* 回答入力モーダル（テーブル内では狭いため、広い画面で書けるようにする） */
     .rov {
       position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 60;
