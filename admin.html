@@ -242,7 +242,36 @@
       <div id="tab-depts" class="tabsec">
         <div class="toolbar">
           <div class="sp"></div>
+          <button class="ghost" id="deptCsvBtn" type="button" style="margin-top:0">CSVで一括設定</button>
           <button class="ghost" id="deptAddBtn" type="button" style="margin-top:0">＋ 部署を追加</button>
+        </div>
+
+        <!-- 部署のCSV一括設定 -->
+        <div class="card hidden" id="deptCsvCard">
+          <h2>CSVで部署を一括設定</h2>
+          <p style="font-size:12px;color:var(--sub);line-height:1.9">
+            1行目はヘッダー <b>部署コード,種別,部署名,説明,アプリ,並び順</b>（説明・アプリ・並び順は任意）。文字コードは UTF-8 / Shift_JIS のどちらでも読み込めます。<br />
+            <b>部署コードで照合</b>し、既にあれば更新・無ければ新規作成します。<b>種別</b>は 部署 / 工場（空欄なら部署）。<b>アプリ</b>はアプリ名を「/」区切りで並べます（例: 生産計画/在庫管理）。<br />
+            アプリ列を<b>丸ごと省略</b>すると現在の割当を維持します。列があって空欄の場合は「割当なし」になるためご注意ください。
+            <a href="#" class="plain" id="deptCsvTemplate">テンプレートCSVをダウンロード</a>
+          </p>
+          <label class="f">CSVファイル</label>
+          <input type="file" id="deptCsvFile" class="filebox" accept=".csv,text/csv" />
+          <div class="msg err hidden" id="deptCsvMsg"></div>
+        </div>
+
+        <div class="card hidden" id="deptCsvPreviewCard">
+          <h2>プレビュー（<span id="deptCsvCount">0</span>行）</h2>
+          <div class="tblwrap">
+            <table class="tbl">
+              <thead>
+                <tr><th>#</th><th>部署コード</th><th>種別</th><th>部署名</th><th>説明</th><th>アプリ</th><th>並び順</th><th>チェック</th></tr>
+              </thead>
+              <tbody id="deptCsvRows"></tbody>
+            </table>
+          </div>
+          <button class="primary" id="deptCsvRun" type="button">一括設定を実行</button>
+          <div class="msg hidden" id="deptCsvProgress"></div>
         </div>
 
         <div class="card hidden" id="deptFormCard">
@@ -1350,6 +1379,178 @@
         msg.className = "msg err";
       } finally {
         $("approvalsResetBtn").disabled = false;
+      }
+    });
+
+    // ===== 部署のCSV一括設定 =====
+    // 下の CSV 一括登録と同じ downloadCsv / decodeCsvFile / parseCsv を使う（関数宣言なので巻き上げ済み）。
+    const DEPT_CSV_HEADER = ["部署コード", "種別", "部署名", "説明", "アプリ", "並び順"];
+    let deptCsvRows = [];
+    // アプリ列は「アプリ名」を基本にしつつ、キー（keikaku 等）でも受け付ける
+    const APP_KEY_BY_NAME = Object.fromEntries(APP_KEYS.map((k) => [APPS[k].name, k]));
+
+    $("deptCsvBtn").addEventListener("click", () => {
+      const card = $("deptCsvCard");
+      const show = card.classList.contains("hidden");
+      card.classList.toggle("hidden", !show);
+      if (!show) {
+        $("deptCsvPreviewCard").classList.add("hidden");
+        $("deptCsvFile").value = "";
+      }
+    });
+
+    $("deptCsvTemplate").addEventListener("click", (e) => {
+      e.preventDefault();
+      // 現在の登録内容をそのまま書き出す。編集して読み込ませれば一括更新になる。
+      const body = departments.map((d) => [
+        d.code || "", d.kind === "factory" ? "工場" : "部署", d.name, d.description || "",
+        (Array.isArray(d.apps) ? d.apps : []).map((k) => (APPS[k] ? APPS[k].name : k)).join("/"),
+        d.sort == null ? "" : String(d.sort),
+      ]);
+      downloadCsv("portal-departments.csv", [DEPT_CSV_HEADER].concat(
+        body.length > 0 ? body : [["D001", "部署", "生産管理部", "計画・日報", "生産計画/生産日報", "1"]]));
+    });
+
+    // 種別の表記ゆれを吸収（api/departments-import.js の normalizeKind と同じ規則）
+    function deptKind(v) {
+      const s = String(v == null ? "" : v).trim().toLowerCase();
+      if (s === "" || s === "dept" || s === "部署" || s === "部門") return "dept";
+      if (s === "factory" || s === "工場") return "factory";
+      return null;
+    }
+
+    // アプリ名/キーの並び（「/」「、」「,」「空白」区切り）をアプリキーの配列にする
+    function parseAppList(s) {
+      const parts = String(s || "").split(/[\/、,，\s]+/).map((t) => t.trim()).filter(Boolean);
+      const keys = [], unknown = [];
+      for (const p of parts) {
+        const k = APPS[p] ? p : APP_KEY_BY_NAME[p];
+        if (k) { if (!keys.includes(k)) keys.push(k); } else unknown.push(p);
+      }
+      return { keys, unknown };
+    }
+
+    function deptCsvToObjects(rows) {
+      if (rows.length === 0) return [];
+      let idx = { code: 0, kind: 1, name: 2, desc: 3, apps: 4, sort: 5 };
+      let start = 0;
+      const head = rows[0].map((c) => String(c).trim());
+      if (head.some((h) => h.includes("部署コード") || h.includes("コード"))) {
+        start = 1;
+        // 見出しがある場合は見つかった列だけを使う（-1 = 未指定）
+        const find = (...keys) => head.findIndex((h) => keys.some((k) => h === k || h.includes(k)));
+        idx = {
+          code: find("部署コード", "コード"),
+          kind: find("種別"),
+          name: head.findIndex((h) => h === "部署名" || h === "名称" || h === "名前"),
+          desc: find("説明", "備考"),
+          apps: find("アプリ"),
+          sort: find("並び順", "並び", "順"),
+        };
+      }
+      const cell = (r, i) => (i >= 0 ? String(r[i] || "").trim() : undefined);
+      const out = [];
+      for (let i = start; i < rows.length; i++) {
+        const r = rows[i];
+        out.push({
+          code: cell(r, idx.code) || "",
+          kind: cell(r, idx.kind) || "",
+          name: cell(r, idx.name) || "",
+          description: cell(r, idx.desc) || "",
+          // 列そのものが無い場合は undefined＝現在の割当を維持（サーバー側と揃える）
+          apps: idx.apps >= 0 ? cell(r, idx.apps) : undefined,
+          sort: cell(r, idx.sort) || "",
+        });
+      }
+      return out;
+    }
+
+    function deptPrecheck(r, seen) {
+      if (!r.code) return { ok: false, note: "部署コードが空です" };
+      if (!/^[A-Za-z0-9_-]+$/.test(r.code)) return { ok: false, note: "部署コードに使えない文字があります" };
+      if (seen.has(r.code)) return { ok: false, note: "ファイル内で部署コードが重複しています" };
+      if (!r.name) return { ok: false, note: "部署名が空です" };
+      if (deptKind(r.kind) === null) return { ok: false, note: "種別は 部署 / 工場 です" };
+      if (r.apps !== undefined) {
+        const { unknown } = parseAppList(r.apps);
+        if (unknown.length > 0) return { ok: false, note: "不明なアプリ: " + unknown.join("、") };
+      }
+      seen.add(r.code);
+      const exists = departments.some((d) => String(d.code || "") === r.code);
+      return { ok: true, note: exists ? "更新" : "新規作成" };
+    }
+
+    $("deptCsvFile").addEventListener("change", async () => {
+      const msg = $("deptCsvMsg");
+      msg.classList.add("hidden");
+      $("deptCsvPreviewCard").classList.add("hidden");
+      const file = $("deptCsvFile").files && $("deptCsvFile").files[0];
+      if (!file) return;
+      try {
+        const text = await decodeCsvFile(file);
+        deptCsvRows = deptCsvToObjects(parseCsv(text));
+        if (deptCsvRows.length === 0) {
+          msg.textContent = "CSVにデータ行がありません";
+          msg.classList.remove("hidden");
+          return;
+        }
+        $("deptCsvCount").textContent = String(deptCsvRows.length);
+        const seen = new Set();
+        $("deptCsvRows").replaceChildren(...deptCsvRows.map((r, i) => {
+          const chk = deptPrecheck(r, seen);
+          const appNames = r.apps === undefined
+            ? '<span class="sub">（現状を維持）</span>'
+            : escHtml(parseAppList(r.apps).keys.map((k) => APPS[k].name).join("、") || "（割当なし）");
+          const tr = document.createElement("tr");
+          tr.innerHTML =
+            '<td class="sub">' + (i + 1) + "</td>" +
+            "<td><b>" + escHtml(r.code) + "</b></td>" +
+            "<td>" + escHtml(r.kind || "部署") + "</td>" +
+            "<td>" + escHtml(r.name) + "</td>" +
+            '<td class="sub">' + escHtml(r.description) + "</td>" +
+            "<td>" + appNames + "</td>" +
+            "<td>" + escHtml(r.sort) + "</td>" +
+            "<td>" + (chk.ok
+              ? '<span class="badge b-created">' + escHtml(chk.note) + "</span>"
+              : '<span class="badge b-error">' + escHtml(chk.note) + "</span>") + "</td>";
+          return tr;
+        }));
+        $("deptCsvPreviewCard").classList.remove("hidden");
+      } catch (e) {
+        msg.textContent = "CSVの読み込みに失敗しました: " + e.message;
+        msg.classList.remove("hidden");
+      }
+    });
+
+    $("deptCsvRun").addEventListener("click", async () => {
+      if (deptCsvRows.length === 0) return;
+      const prog = $("deptCsvProgress");
+      prog.className = "msg";
+      prog.classList.remove("hidden");
+      $("deptCsvRun").disabled = true;
+      try {
+        const payload = deptCsvRows.map((r) => ({
+          code: r.code, kind: r.kind, name: r.name, description: r.description,
+          // 列が無ければ apps を送らない＝サーバー側で現在の割当を維持
+          ...(r.apps === undefined ? {} : { apps: parseAppList(r.apps).keys }),
+          sort: r.sort,
+        }));
+        const res = await api("/api/departments-import", { method: "POST", body: JSON.stringify({ rows: payload }) });
+        const list = res.rows || [];
+        const n = (s) => list.filter((x) => x.status === s).length;
+        const errs = list.filter((x) => x.status === "error");
+        prog.className = "msg" + (errs.length > 0 ? " err" : " ok");
+        prog.textContent =
+          "完了: 新規 " + n("created") + " 件 / 更新 " + n("updated") + " 件" +
+          (errs.length > 0 ? " / エラー " + errs.length + " 件（" + errs.map((x) => x.code + ": " + x.message).join(" ／ ") + "）" : "");
+        await loadDepartments();
+        renderDeptTable();
+        renderAppChecks();
+      } catch (e) {
+        prog.className = "msg err";
+        prog.textContent = e.message || "一括設定に失敗しました";
+      } finally {
+        $("deptCsvRun").disabled = false;
       }
     });
 
