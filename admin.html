@@ -168,6 +168,12 @@
       font-size: 11px; letter-spacing: .08em; padding: 18px 12px; margin-top: 8px;
     }
     footer.site .c { opacity: .75; }
+    /* 一覧のユーザー名（クリックで詳細） */
+    button.ulink {
+      background: none; border: none; padding: 0; font: inherit; color: var(--red);
+      cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+    }
+    button.ulink:hover { opacity: .75; }
     /* 回答入力モーダル（テーブル内では狭いため、広い画面で書けるようにする） */
     .rov {
       position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 60;
@@ -420,10 +426,24 @@
           <div id="ufResult" class="hidden" style="margin-top:12px"></div>
         </div>
 
+        <!-- 絞り込み・並び替え（一覧を見やすくするため、詳細はユーザー名クリックで表示） -->
+        <div class="toolbar" style="margin-top:16px">
+          <input type="text" id="uSearch" placeholder="社員番号・氏名・メールで検索" style="max-width:260px" />
+          <select id="uDeptFilter" style="max-width:200px"><option value="">すべての部署</option></select>
+          <select id="uSort" style="max-width:170px">
+            <option value="loginId">社員番号順</option>
+            <option value="name">氏名順</option>
+            <option value="department">部署順</option>
+            <option value="role">権限順</option>
+          </select>
+          <div class="sp"></div>
+          <span class="sub" id="uCount" style="font-size:11.5px"></span>
+        </div>
+
         <div class="tblwrap">
           <table class="tbl">
             <thead>
-              <tr><th>社員番号</th><th>ユーザー名</th><th>権限</th><th>部署</th><th>職場</th><th>承認者</th><th>メール</th><th>発行状況</th><th></th></tr>
+              <tr><th>社員番号</th><th>ユーザー名</th><th>権限</th><th>部署</th><th>職場</th><th></th></tr>
             </thead>
             <tbody id="userRows"></tbody>
           </table>
@@ -435,15 +455,6 @@
           <strong>名簿から削除しても、各アプリ側のアカウントは削除されません。</strong>アプリ側のアカウント削除は各アプリの管理機能で行ってください。
         </div>
 
-        <div class="card">
-          <h2>滞留中の申請リセット</h2>
-          <p style="font-size:12px;color:var(--sub);line-height:1.9">
-            各アプリ（品質管理・設備管理・転注管理・型管理）で承認待ちのまま滞留している申請を一括でリセットします。承認者の変更後などに使用してください。
-          </p>
-          <button class="ghost" id="approvalsResetBtn" type="button">滞留中の申請を全てリセット</button>
-          <div class="msg hidden" id="approvalsResetMsg"></div>
-          <div id="approvalsResetResult" class="hidden" style="margin-top:10px"></div>
-        </div>
       </div>
 
       <!-- ③ CSV一括登録 -->
@@ -513,6 +524,21 @@
   </div>
 
   <footer class="site"><span class="c">株式会社パロマ 生産・調達統括本部</span></footer>
+
+  <!-- ユーザー詳細モーダル（一覧のユーザー名クリックで開く） -->
+  <div class="rov hidden" id="userModal">
+    <div class="rcard">
+      <h3 id="umName">ユーザー詳細</h3>
+      <div class="rmeta" id="umSub"></div>
+      <div id="umBody" style="margin-top:14px"></div>
+      <div class="ractions">
+        <button class="ghost" id="umClose" type="button">閉じる</button>
+        <button class="ghost" id="umRefresh" type="button">状況更新</button>
+        <button class="ghost" id="umDelete" type="button">削除</button>
+        <button class="primary" id="umEdit" type="button">編集する</button>
+      </div>
+    </div>
+  </div>
 
   <!-- 回答入力モーダル -->
   <div class="rov hidden" id="replyModal">
@@ -620,6 +646,7 @@
       renderUserDeptSelect();
       renderUserWorkplaceSelect();
       renderApproverSelect();
+      fillDeptFilter();
       renderUserTable();
     }
 
@@ -1152,86 +1179,164 @@
       return '<span class="sub">未設定</span>';
     }
 
+    // 一覧は「社員番号・氏名・権限・部署・職場」だけを出し、詳細はユーザー名クリックで開く。
+    // 列を増やすと横に長くなって読みづらいため。
+    const ROLE_ORDER = { admin: 0, member: 1, worker: 2 };
+
+    // 検索・部署絞り込み・並び替えを適用した表示対象を返す
+    function visibleUsers() {
+      const q = ($("uSearch").value || "").trim().toLowerCase();
+      const dept = $("uDeptFilter").value || "";
+      const sort = $("uSort").value || "loginId";
+      let list = Array.isArray(users) ? users.slice() : [];
+      if (dept) list = list.filter((u) => u.departmentId === dept);
+      if (q) {
+        list = list.filter((u) =>
+          [u.loginId, u.name, u.email, u.departmentName, u.workplaceName]
+            .some((v) => String(v || "").toLowerCase().includes(q)));
+      }
+      const cmp = (a, b) => String(a || "").localeCompare(String(b || ""), "ja");
+      list.sort((a, b) => {
+        if (sort === "name") return cmp(a.name, b.name);
+        if (sort === "role") {
+          const d = (ROLE_ORDER[a.role] ?? 9) - (ROLE_ORDER[b.role] ?? 9);
+          return d !== 0 ? d : cmp(a.loginId, b.loginId);
+        }
+        if (sort === "department") {
+          const d = cmp(a.departmentCode || a.departmentName, b.departmentCode || b.departmentName);
+          return d !== 0 ? d : cmp(a.loginId, b.loginId);
+        }
+        return cmp(a.loginId, b.loginId);
+      });
+      return list;
+    }
+
+    function roleBadgeHtml(u) {
+      return (u.role === "admin"
+        ? '<span class="badge b-admin">管理者</span>'
+        : u.role === "worker"
+        ? '<span class="badge b-worker">作業者</span>'
+        : '<span class="badge b-plain">一般</span>')
+        + (u.canManage ? '<span class="badge b-manage">ポータル管理</span>' : "");
+    }
+
+    // 部署の絞り込み候補を作り直す（選択は可能な限り維持）
+    function fillDeptFilter() {
+      const sel = $("uDeptFilter");
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">すべての部署</option>' +
+        departments.map((d) =>
+          '<option value="' + d.id + '">' + esc((d.code ? d.code + " " : "") + d.name) + "</option>").join("");
+      sel.value = departments.some((d) => d.id === cur) ? cur : "";
+    }
+
     function renderUserTable() {
       const tbody = $("userRows");
       if (!Array.isArray(users) || users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="sub">ユーザーはまだ登録されていません</td></tr>';
+        $("uCount").textContent = "";
+        tbody.innerHTML = '<tr><td colspan="6" class="sub">ユーザーはまだ登録されていません</td></tr>';
+        return;
+      }
+      const list = visibleUsers();
+      $("uCount").textContent = list.length === users.length
+        ? users.length + " 名"
+        : list.length + " / " + users.length + " 名";
+      if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="sub">条件に一致するユーザーがいません</td></tr>';
         return;
       }
       const rows = [];
-      for (const u of users) {
+      for (const u of list) {
         const tr = document.createElement("tr");
-        const roleBadge = (u.role === "admin"
-          ? '<span class="badge b-admin">管理者</span>'
-          : u.role === "worker"
-          ? '<span class="badge b-worker">作業者</span>'
-          : '<span class="badge b-plain">一般</span>')
-          + (u.canManage ? '<span class="badge b-manage">ポータル管理</span>' : "");
-        // 職場は「部署コード › 職場コード」の階層で表示（名前はサブ行・tooltip）
-        const wpHier = u.workplaceId
-          ? esc((u.departmentCode ? u.departmentCode + " › " : "") + (u.workplaceCode || u.workplaceName || "")) +
-            (u.workplaceCode && u.workplaceName ? '<div class="sub">' + esc(u.workplaceName) + "</div>" : "")
-          : '<span class="sub">—</span>';
         tr.innerHTML =
           "<td><b>" + esc(u.loginId) + "</b></td>" +
-          "<td>" + esc(u.name) + "</td>" +
-          "<td>" + roleBadge + "</td>" +
+          '<td><button type="button" class="ulink">' + esc(u.name) + "</button></td>" +
+          "<td>" + roleBadgeHtml(u) + "</td>" +
           "<td>" + esc((u.departmentCode ? u.departmentCode + " " : "") + (u.departmentName || "未設定")) + "</td>" +
-          "<td title=\"" + esc(u.workplaceName || "") + "\">" + wpHier + "</td>" +
-          "<td>" + approverCellHtml(u) + "</td>" +
-          "<td class=\"sub\">" + esc(u.email || "") + "</td>" +
-          "<td>" + provisionBadges(u.provisions) + "</td>" +
-          "<td style=\"white-space:nowrap\"></td>";
+          "<td>" + (u.workplaceId ? esc(u.workplaceName || u.workplaceCode || "") : '<span class="sub">—</span>') + "</td>" +
+          '<td style="white-space:nowrap"></td>';
+        tr.querySelector(".ulink").addEventListener("click", () => openUserDetail(u));
         const cell = tr.lastElementChild;
-
         const be = document.createElement("button");
         be.className = "mini"; be.type = "button"; be.textContent = "編集";
         be.addEventListener("click", () => startEditUser(u));
-        const br = document.createElement("button");
-        br.className = "mini"; br.type = "button"; br.textContent = "状況更新";
-        br.style.marginLeft = "6px";
-        const bd = document.createElement("button");
-        bd.className = "mini danger"; bd.type = "button"; bd.textContent = "削除";
-        bd.style.marginLeft = "6px";
+        const bi = document.createElement("button");
+        bi.className = "mini"; bi.type = "button"; bi.textContent = "詳細";
+        bi.style.marginLeft = "6px";
+        bi.addEventListener("click", () => openUserDetail(u));
         cell.appendChild(be);
-        cell.appendChild(br);
-        cell.appendChild(bd);
-
-        // 状況更新: 再プロビジョニングして最新の発行状況（パスワード設定状況）を取得
-        br.addEventListener("click", async () => {
-          const msg = $("usersMsg");
-          msg.classList.add("hidden");
-          br.disabled = true;
-          br.textContent = "更新中…";
-          try {
-            const r = await api("/api/users-refresh", { method: "POST", body: JSON.stringify({ id: u.id }) });
-            u.provisions = r && Array.isArray(r.apps) ? r.apps : [];
-            renderUserTable();
-          } catch (e) {
-            msg.textContent = e.message;
-            msg.classList.remove("hidden");
-            br.disabled = false;
-            br.textContent = "状況更新";
-          }
-        });
-        bd.addEventListener("click", async () => {
-          if (!confirm("「" + u.name + "（" + u.loginId + "）」を名簿から削除しますか？\n※各アプリ側のアカウントは削除されません。")) return;
-          const msg = $("usersMsg");
-          msg.classList.add("hidden");
-          try {
-            await api("/api/users", { method: "DELETE", body: JSON.stringify({ id: u.id }) });
-            if (editingUserId === u.id) cancelEditUser();
-            await reloadAll();
-          } catch (e) {
-            msg.textContent = e.message;
-            msg.classList.remove("hidden");
-          }
-        });
-
+        cell.appendChild(bi);
         rows.push(tr);
       }
       tbody.replaceChildren(...rows);
     }
+
+    // ===== ユーザー詳細モーダル =====
+    let detailUser = null;
+    function openUserDetail(u) {
+      detailUser = u;
+      $("umName").textContent = u.name;
+      $("umSub").innerHTML = "社員番号 <b>" + esc(u.loginId) + "</b>　" + roleBadgeHtml(u);
+      const row = (label, html) =>
+        '<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px">' +
+        '<div class="sub" style="min-width:96px;font-size:12px">' + label + "</div><div style=\"flex:1\">" + html + "</div></div>";
+      const wp = u.workplaceId
+        ? esc((u.workplaceCode ? u.workplaceCode + " " : "") + (u.workplaceName || ""))
+        : '<span class="sub">未設定</span>';
+      $("umBody").innerHTML =
+        row("部署", esc((u.departmentCode ? u.departmentCode + " " : "") + (u.departmentName || "未設定"))) +
+        row("職場", wp) +
+        row("承認者", approverCellHtml(u)) +
+        row("メール", u.email ? esc(u.email) : '<span class="sub">未登録</span>') +
+        row("発行状況", provisionBadges(u.provisions));
+      $("userModal").classList.remove("hidden");
+    }
+    function closeUserDetail() { $("userModal").classList.add("hidden"); detailUser = null; }
+    $("umClose").addEventListener("click", closeUserDetail);
+    $("userModal").addEventListener("click", (e) => { if (e.target === $("userModal")) closeUserDetail(); });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !$("userModal").classList.contains("hidden")) closeUserDetail();
+    });
+    $("umEdit").addEventListener("click", () => {
+      const u = detailUser;
+      closeUserDetail();
+      if (u) startEditUser(u);
+    });
+    // 状況更新: 再プロビジョニングして最新の発行状況を取得する
+    $("umRefresh").addEventListener("click", async () => {
+      const u = detailUser;
+      if (!u) return;
+      const b = $("umRefresh");
+      b.disabled = true;
+      b.textContent = "更新中…";
+      try {
+        const r = await api("/api/users-refresh", { method: "POST", body: JSON.stringify({ id: u.id }) });
+        u.provisions = r && Array.isArray(r.apps) ? r.apps : [];
+        openUserDetail(u);
+        renderUserTable();
+      } catch (e) {
+        $("umBody").insertAdjacentHTML("afterbegin", '<div class="msg err">' + esc(e.message) + "</div>");
+      } finally {
+        b.disabled = false;
+        b.textContent = "状況更新";
+      }
+    });
+    $("umDelete").addEventListener("click", async () => {
+      const u = detailUser;
+      if (!u) return;
+      if (!confirm("「" + u.name + "（" + u.loginId + "）」を名簿から削除しますか？\n※各アプリ側のアカウントは削除されません。")) return;
+      try {
+        await api("/api/users", { method: "DELETE", body: JSON.stringify({ id: u.id }) });
+        if (editingUserId === u.id) cancelEditUser();
+        closeUserDetail();
+        await reloadAll();
+      } catch (e) {
+        $("umBody").insertAdjacentHTML("afterbegin", '<div class="msg err">' + esc(e.message) + "</div>");
+      }
+    });
+    ["uSearch", "uDeptFilter", "uSort"].forEach((id) => {
+      $(id).addEventListener(id === "uSearch" ? "input" : "change", renderUserTable);
+    });
 
     // 編集モード: フォームに既存値を入れて PUT（社員番号は変更不可）
     function startEditUser(u) {
@@ -1339,46 +1444,6 @@
         msg.classList.remove("hidden");
       } finally {
         $("ufAdd").disabled = false;
-      }
-    });
-
-    // ===== ②-2 滞留承認リセット =====
-    $("approvalsResetBtn").addEventListener("click", async () => {
-      if (!confirm("各アプリで承認待ちのまま滞留している申請を全てリセットします。よろしいですか？")) return;
-      const msg = $("approvalsResetMsg");
-      const box = $("approvalsResetResult");
-      msg.className = "msg";
-      msg.textContent = "リセットを実行中…";
-      msg.classList.remove("hidden");
-      box.classList.add("hidden");
-      $("approvalsResetBtn").disabled = true;
-      try {
-        const r = await api("/api/approvals-reset", { method: "POST", body: JSON.stringify({}) });
-        const results = r && Array.isArray(r.results) ? r.results : [];
-        msg.textContent = "リセットが完了しました。アプリごとの結果:";
-        msg.className = "msg ok";
-        const wrap = document.createElement("div");
-        wrap.className = "linksbox";
-        for (const x of results) {
-          const row = document.createElement("div");
-          row.className = "lrow";
-          const an = document.createElement("span");
-          an.className = "an";
-          an.textContent = x.name || (APPS[x.app] ? APPS[x.app].name : x.app);
-          row.appendChild(an);
-          const st = document.createElement("span");
-          st.className = "badge " + (x.ok ? "b-created" : "b-error");
-          st.textContent = x.ok ? "リセット " + (Number(x.reset) || 0) + " 件" : "エラー";
-          row.appendChild(st);
-          wrap.appendChild(row);
-        }
-        box.replaceChildren(wrap);
-        box.classList.remove("hidden");
-      } catch (e) {
-        msg.textContent = e.message;
-        msg.className = "msg err";
-      } finally {
-        $("approvalsResetBtn").disabled = false;
       }
     });
 
