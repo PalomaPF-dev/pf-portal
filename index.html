@@ -302,10 +302,12 @@
 
     /* ===== レスポンシブ ===== */
     @media (max-width: 700px) {
-      header.site .hinner { padding: 12px 16px; }
+      /* ロゴ＋タイトルとボタン群が1行に入り切らない幅では2段に折り返す
+         （ログアウト・管理者ボタンがタイトルに重なって切れないように） */
+      header.site .hinner { padding: 12px 16px; flex-wrap: wrap; row-gap: 8px; }
       header.site .brandlogo { height: 26px; }
-      header.site .htitle { margin-left: 10px; padding-left: 10px; gap: 8px; }
-      header.site .htitle .tname { font-size: 13.5px; }
+      header.site .htitle { margin-left: 10px; padding-left: 10px; gap: 8px; overflow: hidden; }
+      header.site .htitle .tname { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; }
       header.site .htitle .tscope { display: none; }
       header.site .huser { display: none; }
       .wrap { padding: 0 16px; }
