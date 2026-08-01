@@ -26,7 +26,7 @@ const CATEGORIES = [
 const APP_NAMES = {
   keikaku: "生産計画", nippou: "生産日報", sekisai: "出荷積載", zumen: "図面管理",
   keisoku: "計測機器", setsubi: "設備管理", hinshitsu: "品質管理", zaiko: "在庫管理",
-  kanagata: "型管理", hoju: "補充計画", tenchu: "転注管理",
+  kanagata: "型管理", hoju: "補充計画", tenchu: "転注管理", purchasing: "購買単価",
 };
 function normalizeApp(v) {
   const k = String(v || "").trim();
