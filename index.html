@@ -430,8 +430,10 @@
       <h3>お問い合わせ</h3>
       <p class="mlead">システムの不具合・操作方法・アカウントに関するご連絡はこちらから。担当者が確認します。</p>
       <form id="contactForm">
-        <label for="cApp">対象アプリ<span class="req">必須</span></label>
-        <select id="cApp" required>
+        <!-- 「ポータル全体・その他」は value="" のため required にすると選べない
+             （ブラウザが未選択とみなす）。空値はサーバー側で「ポータル全体・その他」として保存する -->
+        <label for="cApp">対象アプリ</label>
+        <select id="cApp">
           <option value="">ポータル全体・その他</option>
         </select>
         <label for="cCat">お問い合わせ分類<span class="req">必須</span></label>
