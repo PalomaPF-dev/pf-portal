@@ -131,6 +131,15 @@
       transition: transform .12s ease;
     }
     table.tbl tr.grouphead button[aria-expanded="true"] .ghmark { transform: rotate(90deg); }
+
+    /* 部署一覧: 部署コードのセルを、配下の職場を開閉するボタンにする */
+    button.dtoggle {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: none; border: 0; padding: 0; cursor: pointer; font: inherit; color: var(--ink);
+    }
+    button.dtoggle:hover { color: var(--red); }
+    button.dtoggle .ghmark { transition: transform .12s ease; color: var(--sub); }
+    button.dtoggle[aria-expanded="true"] .ghmark { transform: rotate(90deg); }
     table.tbl tr.grouphead .cnt { color: var(--sub); font-weight: 400; font-size: 11.5px; }
 
     /* お問い合わせ一覧: 日時・分類・状態など折返し禁止の列が幅を取り合うと、
@@ -279,6 +288,7 @@
       <!-- ① 部署設定 -->
       <div id="tab-depts" class="tabsec">
         <div class="toolbar">
+          <button class="ghost" id="dToggleAll" type="button" style="margin-top:0">すべて展開</button>
           <div class="sp"></div>
           <button class="ghost" id="deptCsvBtn" type="button" style="margin-top:0">CSVで一括設定</button>
           <button class="ghost" id="deptAddBtn" type="button" style="margin-top:0">＋ 部署を追加</button>
@@ -919,20 +929,51 @@
       workplaces = Array.isArray(rows) ? rows : [];
     }
 
+    // 職場一覧を開いている部署。既定は空＝すべて折りたたみ（部署の一覧として使える）
+    const expandedDeptRows = new Set();
+
+    // 「すべて展開／すべて折りたたむ」ボタンの表示を、現在の開閉状況に合わせる
+    function updateDeptToggleAllLabel() {
+      const btn = $("dToggleAll");
+      if (!btn) return;
+      btn.disabled = departments.length === 0;
+      const allOpen = departments.length > 0 && departments.every((d) => expandedDeptRows.has(d.id));
+      btn.textContent = allOpen ? "すべて折りたたむ" : "すべて展開";
+      btn.dataset.action = allOpen ? "collapse" : "expand";
+    }
+
     function renderDeptTable() {
       const tbody = $("deptRows");
       const rows = [];
+      updateDeptToggleAllLabel();
       for (const d of departments) {
+        const open = expandedDeptRows.has(d.id);
+        const wpCount = workplaces.filter((w) => w.departmentId === d.id).length;
         const tr = document.createElement("tr");
         const apps = (Array.isArray(d.apps) ? d.apps : []).filter((k) => APPS[k]);
         tr.innerHTML =
-          "<td><b>" + esc(d.code || "—") + "</b></td>" +
+          '<td class="dcode"></td>' +
           "<td>" + (d.kind === "factory" ? "工場" : "部署") + "</td>" +
-          "<td><b>" + esc(d.name) + "</b></td>" +
+          "<td><b>" + esc(d.name) + "</b>" +
+          ' <span class="cnt">職場 ' + wpCount + "</span></td>" +
           "<td class=\"sub\">" + esc(d.description || "") + "</td>" +
           "<td>" + (apps.length ? apps.map((k) => '<span class="chip">' + esc(APPS[k].name) + "</span>").join("") : '<span class="sub">なし</span>') + "</td>" +
           "<td>" + esc(d.sort) + "</td>" +
           "<td style=\"white-space:nowrap\"></td>";
+        // 部署コードのセルを、配下の職場を開閉するボタンにする
+        const toggle = document.createElement("button");
+        toggle.className = "dtoggle";
+        toggle.type = "button";
+        toggle.setAttribute("aria-expanded", open ? "true" : "false");
+        toggle.title = open ? "職場を隠す" : "職場を表示";
+        toggle.innerHTML = chevronHtml() + "<b>" + esc(d.code || "—") + "</b>";
+        toggle.addEventListener("click", () => {
+          if (expandedDeptRows.has(d.id)) expandedDeptRows.delete(d.id);
+          else expandedDeptRows.add(d.id);
+          renderDeptTable();
+        });
+        tr.querySelector(".dcode").appendChild(toggle);
+
         const cell = tr.lastElementChild;
         const be = document.createElement("button");
         be.className = "mini"; be.type = "button"; be.textContent = "編集";
@@ -954,7 +995,9 @@
         });
         cell.appendChild(be);
         cell.appendChild(bd);
-        rows.push(tr, renderWorkplaceSubRow(d));
+        rows.push(tr);
+        // 職場一覧は開いているときだけ出す（部署が多いと一覧が長くなるため）
+        if (open) rows.push(renderWorkplaceSubRow(d));
       }
       tbody.replaceChildren(...rows);
     }
@@ -1267,6 +1310,16 @@
     // 日本語の並び比較（部署コード・氏名など）
     const cmpJa = (a, b) => String(a || "").localeCompare(String(b || ""), "ja");
 
+    /**
+     * 開閉マークの山形アイコン。閉じているときは右向き、開くと下向き（CSSで90度回転）。
+     * 三角の文字（▶等）は環境によって絵文字で描画されるため SVG で描く。
+     */
+    function chevronHtml() {
+      return '<span class="ghmark"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" ' +
+        'stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">' +
+        '<polyline points="9 18 15 12 9 6" /></svg></span>';
+    }
+
     // 開いている部署の集合。既定は空＝すべて折りたたみ（部署の一覧として見せる）
     const expandedDepts = new Set();
 
@@ -1331,9 +1384,7 @@
         const btn = document.createElement("button");
         btn.type = "button";
         btn.innerHTML =
-          '<span class="ghmark"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" ' +
-          'stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">' +
-          '<polyline points="9 18 15 12 9 6" /></svg></span>' +
+          chevronHtml() +
           "<span>" + esc((g.code ? g.code + " " : "") + g.name) + "</span>" +
           '<span class="cnt">' + g.users.length + " 名</span>";
         btn.setAttribute("aria-expanded", open ? "true" : "false");
@@ -1440,6 +1491,13 @@
     });
     ["uSearch", "uDeptFilter", "uSort"].forEach((id) => {
       $(id).addEventListener(id === "uSearch" ? "input" : "change", renderUserTable);
+    });
+
+    // 部署ごとの職場一覧の一括開閉
+    $("dToggleAll").addEventListener("click", () => {
+      if ($("dToggleAll").dataset.action === "collapse") expandedDeptRows.clear();
+      else for (const d of departments) expandedDeptRows.add(d.id);
+      renderDeptTable();
     });
 
     // 部署グループの一括開閉
