@@ -101,8 +101,16 @@ async function handleLaunch(req, res, app) {
       res.status(403).json({ message: "このアプリを利用する権限がありません" });
       return;
     }
+    // role / name も渡し、アプリ側でアカウント未発行でも正しい権限・氏名でログインできるようにする。
+    // 旧アプリは loginId / app / exp のみを参照するため、追加フィールドがあっても影響しない。
     const payload = Buffer.from(
-      JSON.stringify({ loginId: profile.loginId, app, exp: Date.now() + TOKEN_TTL_MS })
+      JSON.stringify({
+        loginId: profile.loginId,
+        name: profile.name,
+        role: profile.role,
+        app,
+        exp: Date.now() + TOKEN_TTL_MS,
+      })
     ).toString("base64url");
     const sig = crypto.createHmac("sha256", provisionKey).update(payload).digest("hex");
     res.statusCode = 302;
