@@ -117,6 +117,22 @@
     table.tbl tr:last-child td { border-bottom: none; }
     table.tbl td .sub { color: var(--sub); font-size: 11px; }
 
+    /* ユーザー一覧の部署見出し（クリックで開閉）。行全体を押せるようにする */
+    table.tbl tr.grouphead td { background: var(--soft); padding: 0; }
+    table.tbl tr.grouphead button {
+      display: flex; align-items: center; gap: 8px; width: 100%;
+      background: none; border: 0; cursor: pointer; font: inherit; color: var(--ink);
+      padding: 8px 10px; text-align: left; font-weight: 700; font-size: 12.5px;
+    }
+    table.tbl tr.grouphead button:hover { background: #efefec; }
+    /* 開閉マーク。三角の文字（▶等）は環境により絵文字で描画されるため SVG を使う */
+    table.tbl tr.grouphead .ghmark {
+      display: inline-flex; flex-shrink: 0; color: var(--sub);
+      transition: transform .12s ease;
+    }
+    table.tbl tr.grouphead button[aria-expanded="true"] .ghmark { transform: rotate(90deg); }
+    table.tbl tr.grouphead .cnt { color: var(--sub); font-weight: 400; font-size: 11.5px; }
+
     /* お問い合わせ一覧: 日時・分類・状態など折返し禁止の列が幅を取り合うと、
        日本語は1文字ずつでも折り返せるため「内容」「氏名」が極端に潰れる。
        列に下限幅を与え、収まらないときは表ごと横スクロールさせる。 */
@@ -452,6 +468,7 @@
             <option value="department">部署順</option>
             <option value="role">権限順</option>
           </select>
+          <button class="ghost" id="uToggleAll" type="button" style="font-size:12px">すべて展開</button>
           <div class="sp"></div>
           <span class="sub" id="uCount" style="font-size:11.5px"></span>
         </div>
@@ -1247,6 +1264,22 @@
       sel.value = departments.some((d) => d.id === cur) ? cur : "";
     }
 
+    // 日本語の並び比較（部署コード・氏名など）
+    const cmpJa = (a, b) => String(a || "").localeCompare(String(b || ""), "ja");
+
+    // 開いている部署の集合。既定は空＝すべて折りたたみ（部署の一覧として見せる）
+    const expandedDepts = new Set();
+
+    // 「すべて展開／すべて折りたたむ」ボタンの表示を、現在の開閉状況に合わせる
+    function updateToggleAllLabel(groups) {
+      const btn = $("uToggleAll");
+      const filtering = Boolean(($("uSearch").value || "").trim() || $("uDeptFilter").value);
+      btn.disabled = filtering || groups.length === 0;
+      const allOpen = groups.length > 0 && groups.every((g) => expandedDepts.has(g.key));
+      btn.textContent = allOpen ? "すべて折りたたむ" : "すべて展開";
+      btn.dataset.action = allOpen ? "collapse" : "expand";
+    }
+
     function renderUserTable() {
       const tbody = $("userRows");
       if (!Array.isArray(users) || users.length === 0) {
@@ -1262,28 +1295,82 @@
         tbody.innerHTML = '<tr><td colspan="6" class="sub">条件に一致するユーザーがいません</td></tr>';
         return;
       }
-      const rows = [];
+      // ===== 部署ごとにまとめ、見出しをクリックで開閉する =====
+      // 検索・部署絞り込み中は、該当者が隠れないよう常に開いた状態で表示する
+      const filtering = Boolean(($("uSearch").value || "").trim() || $("uDeptFilter").value);
+      const groups = new Map();
       for (const u of list) {
-        const tr = document.createElement("tr");
-        tr.innerHTML =
-          "<td><b>" + esc(u.loginId) + "</b></td>" +
-          '<td><button type="button" class="ulink">' + esc(u.name) + "</button></td>" +
-          "<td>" + roleBadgeHtml(u) + "</td>" +
-          "<td>" + esc((u.departmentCode ? u.departmentCode + " " : "") + (u.departmentName || "未設定")) + "</td>" +
-          "<td>" + (u.workplaceId ? esc(u.workplaceName || u.workplaceCode || "") : '<span class="sub">—</span>') + "</td>" +
-          '<td style="white-space:nowrap"></td>';
-        tr.querySelector(".ulink").addEventListener("click", () => openUserDetail(u));
-        const cell = tr.lastElementChild;
-        const be = document.createElement("button");
-        be.className = "mini"; be.type = "button"; be.textContent = "編集";
-        be.addEventListener("click", () => startEditUser(u));
-        const bi = document.createElement("button");
-        bi.className = "mini"; bi.type = "button"; bi.textContent = "詳細";
-        bi.style.marginLeft = "6px";
-        bi.addEventListener("click", () => openUserDetail(u));
-        cell.appendChild(be);
-        cell.appendChild(bi);
-        rows.push(tr);
+        const key = u.departmentId || "__none__";
+        if (!groups.has(key)) {
+          groups.set(key, {
+            key,
+            code: u.departmentCode || "",
+            name: u.departmentName || "未設定",
+            users: [],
+          });
+        }
+        groups.get(key).users.push(u);
+      }
+      // 部署コード順（未設定は末尾）。部署内の並びは選択中の並び替えに従う
+      const ordered = Array.from(groups.values()).sort((a, b) => {
+        if (a.key === "__none__") return 1;
+        if (b.key === "__none__") return -1;
+        return cmpJa(a.code || a.name, b.code || b.name);
+      });
+      // 既定は折りたたみ。開いた部署だけ expandedDepts に持つ
+      const isOpen = (key) => filtering || expandedDepts.has(key);
+      updateToggleAllLabel(ordered);
+
+      const rows = [];
+      for (const g of ordered) {
+        const open = isOpen(g.key);
+        const head = document.createElement("tr");
+        head.className = "grouphead";
+        const td = document.createElement("td");
+        td.colSpan = 6;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.innerHTML =
+          '<span class="ghmark"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" ' +
+          'stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">' +
+          '<polyline points="9 18 15 12 9 6" /></svg></span>' +
+          "<span>" + esc((g.code ? g.code + " " : "") + g.name) + "</span>" +
+          '<span class="cnt">' + g.users.length + " 名</span>";
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+        // 絞り込み中は開閉しても意味がないため、通常表示のときだけ切り替える
+        btn.disabled = filtering;
+        btn.addEventListener("click", () => {
+          if (expandedDepts.has(g.key)) expandedDepts.delete(g.key);
+          else expandedDepts.add(g.key);
+          renderUserTable();
+        });
+        td.appendChild(btn);
+        head.appendChild(td);
+        rows.push(head);
+        if (!open) continue;
+
+        for (const u of g.users) {
+          const tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td><b>" + esc(u.loginId) + "</b></td>" +
+            '<td><button type="button" class="ulink">' + esc(u.name) + "</button></td>" +
+            "<td>" + roleBadgeHtml(u) + "</td>" +
+            "<td>" + esc((u.departmentCode ? u.departmentCode + " " : "") + (u.departmentName || "未設定")) + "</td>" +
+            "<td>" + (u.workplaceId ? esc(u.workplaceName || u.workplaceCode || "") : '<span class="sub">—</span>') + "</td>" +
+            '<td style="white-space:nowrap"></td>';
+          tr.querySelector(".ulink").addEventListener("click", () => openUserDetail(u));
+          const cell = tr.lastElementChild;
+          const be = document.createElement("button");
+          be.className = "mini"; be.type = "button"; be.textContent = "編集";
+          be.addEventListener("click", () => startEditUser(u));
+          const bi = document.createElement("button");
+          bi.className = "mini"; bi.type = "button"; bi.textContent = "詳細";
+          bi.style.marginLeft = "6px";
+          bi.addEventListener("click", () => openUserDetail(u));
+          cell.appendChild(be);
+          cell.appendChild(bi);
+          rows.push(tr);
+        }
       }
       tbody.replaceChildren(...rows);
     }
@@ -1353,6 +1440,17 @@
     });
     ["uSearch", "uDeptFilter", "uSort"].forEach((id) => {
       $(id).addEventListener(id === "uSearch" ? "input" : "change", renderUserTable);
+    });
+
+    // 部署グループの一括開閉
+    $("uToggleAll").addEventListener("click", () => {
+      if ($("uToggleAll").dataset.action === "collapse") {
+        expandedDepts.clear();
+      } else {
+        // 表示中のユーザーが属する部署をすべて開く
+        for (const u of visibleUsers()) expandedDepts.add(u.departmentId || "__none__");
+      }
+      renderUserTable();
     });
 
     // 編集モード: フォームに既存値を入れて PUT（社員番号は変更不可）
