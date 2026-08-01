@@ -191,6 +191,8 @@
     }
     a.tile:active { transform: translateY(0); }
     .tile img { width: 48px; height: 48px; border-radius: 12px; flex-shrink: 0; }
+    /* アイコン画像が無いときの代替（onerror で付与）。壊れた画像アイコンを出さない */
+    .tile img.noimg { background: linear-gradient(135deg, #d4d4d4, #a3a3a3); }
     .tile .t { min-width: 0; display: block; }
     .tile .name { display: block; font-size: 15px; font-weight: 700; white-space: nowrap; }
     .tile .desc { display: block; font-size: 12px; color: var(--sub); margin-top: 3px; line-height: 1.6; }
@@ -525,7 +527,8 @@
         el.href = SSO_APPS.has(k) ? "/api/user?launch=" + encodeURIComponent(k) : a.url;
         el.dataset.app = k;
         el.innerHTML =
-          '<img src="/icons/' + k + '.png" alt="" />' +
+          // アイコン未配置のアプリでも「壊れた画像」を出さず、無地のタイルで表示する
+          '<img src="/icons/' + k + '.png" alt="" onerror="this.classList.add(\'noimg\');this.removeAttribute(\'src\')" />' +
           '<span class="t"><span class="name">' + a.name + '</span><span class="desc">' + a.desc + '</span></span>' +
           '<span class="go">›</span>';
         // サンプル事例リンク（デモ）。カード本体＝業務ログイン、サンプル＝デモ を分ける。
