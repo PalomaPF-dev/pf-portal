@@ -113,6 +113,16 @@
     table.tbl tr:last-child td { border-bottom: none; }
     table.tbl td .sub { color: var(--sub); font-size: 11px; }
 
+    /* お問い合わせ一覧: 日時・分類・状態など折返し禁止の列が幅を取り合うと、
+       日本語は1文字ずつでも折り返せるため「内容」「氏名」が極端に潰れる。
+       列に下限幅を与え、収まらないときは表ごと横スクロールさせる。 */
+    table.tbl-inq { min-width: 1120px; }
+    table.tbl-inq td.inq-name { white-space: nowrap; }
+    table.tbl-inq td.inq-msg {
+      min-width: 340px; white-space: pre-wrap; line-height: 1.8;
+      max-height: 160px; overflow-y: auto;
+    }
+
     .badge {
       display: inline-block; font-size: 10.5px; font-weight: 700; border-radius: 6px;
       padding: 2px 7px; margin: 1px 2px 1px 0; white-space: nowrap;
@@ -513,7 +523,7 @@
           </p>
           <div class="msg err hidden" id="inqMsg"></div>
           <div class="tblwrap">
-            <table class="tbl">
+            <table class="tbl tbl-inq">
               <thead>
                 <tr><th>受付日時</th><th>対象アプリ</th><th>分類</th><th>社員番号</th><th>氏名</th><th>内容</th><th>回答</th><th>状態</th></tr>
               </thead>
@@ -738,9 +748,9 @@
             '<td style="white-space:nowrap">' + dt + '</td>' +
             '<td style="white-space:nowrap"><b>' + escHtml(x.appName || "ポータル全体・その他") + '</b></td>' +
             '<td style="white-space:nowrap">' + escHtml(x.category) + '</td>' +
-            '<td>' + escHtml(x.loginId) + '</td>' +
-            '<td>' + escHtml(x.name) + '</td>' +
-            '<td style="white-space:pre-wrap;max-width:300px">' + escHtml(x.message) + '</td>' +
+            '<td style="white-space:nowrap">' + escHtml(x.loginId) + '</td>' +
+            '<td class="inq-name">' + escHtml(x.name) + '</td>' +
+            '<td class="inq-msg">' + escHtml(x.message) + '</td>' +
             '<td style="min-width:240px">' + reply + '</td>' +
             '<td style="white-space:nowrap">' + state + '<br />' + btn + '</td>' +
             '</tr>';

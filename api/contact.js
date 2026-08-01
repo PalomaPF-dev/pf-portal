@@ -47,16 +47,40 @@ function rateLimited(ip) {
   return false;
 }
 
+// Resend へ送信し、失敗したら理由をログに残す（保存自体は成功させたいので例外は投げない）。
+// fetch は 4xx/5xx でも reject しないため、レスポンス本文まで見ないと失敗に気付けない。
+async function postResend(key, payload, tag) {
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error("[contact] " + tag + " mail rejected:", res.status, body.slice(0, 500));
+  }
+}
+
+// 通知先。CONTACT_NOTIFY_TO（カンマ区切りで複数可）が無ければ従来の info@ へ送る。
+function notifyRecipients() {
+  const raw = (process.env.CONTACT_NOTIFY_TO || "").trim();
+  const list = raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : [];
+  return list.length ? list : ["info@paloma-pf.com"];
+}
+
 async function sendMail(inq) {
   const key = (process.env.RESEND_API_KEY || "").trim();
-  if (!key) return; // メール未設定でも保存は成立させる（管理画面で確認できる）
+  if (!key) {
+    // メール未設定でも保存は成立させる（管理画面で確認できる）。ただし気付けるようログは残す
+    console.warn("[contact] RESEND_API_KEY 未設定のため通知メールを送信しません");
+    return;
+  }
   try {
-    await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
-      body: JSON.stringify({
+    await postResend(
+      key,
+      {
         from: process.env.CONTACT_FROM || "業務ポータル <noreply@paloma-pf.com>",
-        to: ["info@paloma-pf.com"],
+        to: notifyRecipients(),
         subject: "【業務ポータル】お問い合わせ（" + appLabel(inq.app) + "／" + inq.category + "）",
         text:
           "業務ポータルのお問い合わせフォームに新しい投稿がありました。\n\n" +
@@ -67,10 +91,11 @@ async function sendMail(inq) {
           "内容:\n" + inq.message + "\n\n" +
           "— 管理画面（ユーザー設定 › お問い合わせ）でも確認・対応できます。",
         ...(process.env.MAIL_REPLY_TO ? { reply_to: process.env.MAIL_REPLY_TO.trim() } : {}),
-      }),
-    });
+      },
+      "notify"
+    );
   } catch (e) {
-    console.warn("[contact] mail failed:", e && e.message);
+    console.error("[contact] mail failed:", e && e.message);
   }
 }
 
@@ -84,10 +109,9 @@ async function sendReplyMail(sql, inq) {
     const to = rows[0] && rows[0].email ? String(rows[0].email).trim() : "";
     if (!to) return;
     const origin = (process.env.PORTAL_ORIGIN || "https://portal.paloma-pf.com").replace(/\/+$/, "");
-    await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
-      body: JSON.stringify({
+    await postResend(
+      key,
+      {
         from: process.env.CONTACT_FROM || "業務ポータル <noreply@paloma-pf.com>",
         to: [to],
         subject: "【業務ポータル】お問い合わせへの回答",
@@ -100,10 +124,11 @@ async function sendReplyMail(sql, inq) {
           "―――― 回答 ――――\n" + inq.reply + "\n\n" +
           "業務ポータル（" + origin + "）にログインすると、いつでも確認できます。",
         ...(process.env.MAIL_REPLY_TO ? { reply_to: process.env.MAIL_REPLY_TO.trim() } : {}),
-      }),
-    });
+      },
+      "reply"
+    );
   } catch (e) {
-    console.warn("[contact] reply mail failed:", e && e.message);
+    console.error("[contact] reply mail failed:", e && e.message);
   }
 }
 
