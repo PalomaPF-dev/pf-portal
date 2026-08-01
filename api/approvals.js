@@ -9,6 +9,7 @@ const APPROVAL_APPS = [
   { key: "setsubi", name: "設備管理" },
   { key: "tenchu", name: "転注管理" },
   { key: "kanagata", name: "型管理" },
+  { key: "purchasing", name: "購買単価" },
 ];
 
 const FETCH_TIMEOUT_MS = 8000;

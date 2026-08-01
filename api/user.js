@@ -34,6 +34,7 @@ const SSO_APP_KEYS = [
   "kanagata",
   "hoju",
   "tenchu",
+  "purchasing",
 ];
 
 const TOKEN_TTL_MS = 60 * 1000;
