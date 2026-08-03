@@ -22,11 +22,12 @@ const { appBaseUrl } = require("../lib/appUrls");
 
 const LOGIN_ID_RE = /^[A-Za-z0-9_@.-]+$/;
 
-// SSOで起動できるアプリ（zumen は端末内アプリのためアカウント・SSOなし）
+// SSOで起動できるアプリ（＝全アプリ）
 const SSO_APP_KEYS = [
   "keikaku",
   "nippou",
   "sekisai",
+  "zumen",
   "keisoku",
   "setsubi",
   "hinshitsu",

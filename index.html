@@ -475,7 +475,7 @@
 
   <script>
     // ===== アプリ定義 =====
-    // url はSSO非対応アプリ（zumen: 端末内アプリ）の直接リンク用。SSO対応アプリは /api/user?launch= 経由で開く。
+    // url はSSO非対応アプリの直接リンク用。SSO対応アプリは /api/user?launch= 経由で開く。
     const APPS = {
       keikaku:  { name: "生産計画", desc: "販売計画・MRP・日割り", url: "https://plan.paloma-pf.com" },
       nippou:   { name: "生産日報", desc: "設備負荷・工数・日報", url: "https://nippou.paloma-pf.com" },
@@ -490,10 +490,10 @@
       tenchu:   { name: "転注管理", desc: "生産場所変更・引継ぎ・BOM変更", url: "https://tenchu.paloma-pf.com" },
       purchasing:{ name: "購買単価", desc: "購入品単価・承認・MC取込出力", url: "https://purchasing.paloma-pf.com" },
     };
-    // SSOで自動ログインできるアプリ（zumen 以外）
-    const SSO_APPS = new Set(["keikaku","nippou","sekisai","keisoku","setsubi","hinshitsu","zaiko","kanagata","hoju","tenchu","purchasing"]);
+    // SSOで自動ログインできるアプリ（＝全アプリ）
+    const SSO_APPS = new Set(["keikaku","nippou","sekisai","zumen","keisoku","setsubi","hinshitsu","zaiko","kanagata","hoju","tenchu","purchasing"]);
     // サンプル事例（デモ）を表示できるアプリ。<app>/login?demo=1 でサンプルデータ入りのデモが直接開く。
-    // nippou(生産日報) はデモ機能なし、zumen は端末内アプリのため対象外。
+    // nippou(生産日報) はデモ機能なし、zumen はデモ入口が /login?demo=1 ではないため対象外。
     const DEMO_APPS = new Set(["keikaku","sekisai","keisoku","setsubi","hinshitsu","zaiko","kanagata","hoju","tenchu"]);
 
     const $ = (id) => document.getElementById(id);
