@@ -1,8 +1,11 @@
 // アプリ横断の「承認待ち」集計。各アプリの /api/approvals/summary を
 // 共有シークレット PF_PROVISION_KEY で呼び、pending 件数を集めて返す。
+// ログイン中ユーザーの社員番号（loginId）を渡し、各アプリは
+// 「その人がいま承認の番」の件数だけを返す（W/F上にいるだけでは数えない）。
 // 返り値: [{ app, name, url, pending }]（pending>0 のみ）。
 // ※承認申請機能を持つアプリだけを APPROVAL_APPS に列挙する（導入拡大時に追記）。
 const { appBaseUrl } = require("../lib/appUrls");
+const { verifyUserSession } = require("../lib/portalAuth");
 
 const APPROVAL_APPS = [
   { key: "hinshitsu", name: "品質管理" },
@@ -14,14 +17,14 @@ const APPROVAL_APPS = [
 
 const FETCH_TIMEOUT_MS = 8000;
 
-async function fetchPending(appKey, key) {
+async function fetchPending(appKey, key, loginId) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
     const r = await fetch(`${appBaseUrl(appKey)}/api/approvals/summary`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key }),
+      body: JSON.stringify({ key, loginId }),
       signal: controller.signal,
     });
     if (!r.ok) return null;
@@ -41,9 +44,16 @@ module.exports = async (req, res) => {
     res.status(200).json({ apps: [] });
     return;
   }
+  // 誰の承認待ちかを特定するため、ログイン中ユーザーの社員番号を各アプリへ渡す。
+  // 未ログインなら何も出さない（個人の承認状況を出す表示のため）。
+  const session = verifyUserSession(req);
+  if (!session) {
+    res.status(200).json({ apps: [] });
+    return;
+  }
   const results = await Promise.all(
     APPROVAL_APPS.map(async (a) => {
-      const pending = await fetchPending(a.key, key);
+      const pending = await fetchPending(a.key, key, session.loginId);
       return { app: a.key, name: a.name, url: appBaseUrl(a.key), pending: pending || 0 };
     }),
   );
