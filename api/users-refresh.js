@@ -6,7 +6,8 @@ const { requireSql, ensureSchema, readBody, isUuid } = require("../lib/db");
 const { requireManage } = require("../lib/portalAuth");
 const { provisionUsers } = require("../lib/provision");
 
-// 承認者の解決: 本人の承認者指定 → その login_id、なければ職場の管理者 → その login_id（api/users.js と同じ規則）。
+// 承認者の解決: 本人の承認者指定 → 職場の管理者（指定） → 職場所属の管理者（社員番号順で最初）
+// （api/users.js と同じ規則）。
 async function resolveApproverLoginId(sql, approverUserId, workplaceId) {
   if (approverUserId) {
     const rows = await sql`SELECT login_id FROM pf_portal_users WHERE id = ${approverUserId} LIMIT 1`;
@@ -20,6 +21,12 @@ async function resolveApproverLoginId(sql, approverUserId, workplaceId) {
       WHERE w.id = ${workplaceId}
       LIMIT 1`;
     if (rows.length > 0) return rows[0].login_id;
+    const fallback = await sql`
+      SELECT login_id FROM pf_portal_users
+      WHERE workplace_id = ${workplaceId} AND role = 'admin'
+      ORDER BY login_id
+      LIMIT 1`;
+    if (fallback.length > 0) return fallback[0].login_id;
   }
   return null;
 }
@@ -56,7 +63,7 @@ module.exports = async (req, res) => {
     const apps = Array.isArray(u.department_apps) ? u.department_apps : [];
     const factory = u.department_kind === "factory" ? u.department_name : null;
     const role = u.role === "admin" ? "admin" : "member";
-    let approverLoginId = await resolveApproverLoginId(sql, u.approver_user_id, u.workplace_id);
+    let approverLoginId = role === "admin" ? null : await resolveApproverLoginId(sql, u.approver_user_id, u.workplace_id);
     if (approverLoginId === u.login_id) approverLoginId = null;
 
     const results = await provisionUsers(sql, [
