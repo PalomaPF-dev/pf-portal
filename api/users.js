@@ -71,6 +71,41 @@ async function validateRoleWorkplaceApprover(sql, res, { role, workplaceId, appr
   return { role, workplaceId: workplaceId || null, approverUserId: approverUserId || null };
 }
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * 人事プロフィール項目（役職・職務・生年月日・入社年月日・雇用体系）を body から取り出して検証。
+ * 生年月日・入社年月日・雇用体系は個人情報のため、この管理者専用APIの外
+ * （/api/user・users-refresh・アプリ連携）には出さないこと。年齢は保存せず表示時に計算する。
+ * 不正時はレスポンスを書いて null を返す。
+ */
+function parseProfileFields(body, res) {
+  const positionName = String(body.positionName || "").trim();
+  const dutyName = String(body.dutyName || "").trim();
+  const employmentType = String(body.employmentType || "").trim();
+  const birthDate = String(body.birthDate || "").trim();
+  const hireDate = String(body.hireDate || "").trim();
+  for (const [label, v] of [["役職名称", positionName], ["職務名称", dutyName], ["雇用体系名称", employmentType]]) {
+    if (v.length > 100) {
+      res.status(400).json({ message: `${label}は100文字以内で入力してください` });
+      return null;
+    }
+  }
+  for (const [label, v] of [["生年月日", birthDate], ["入社年月日", hireDate]]) {
+    if (v && (!DATE_RE.test(v) || Number.isNaN(Date.parse(v)))) {
+      res.status(400).json({ message: `${label}は YYYY-MM-DD 形式で入力してください` });
+      return null;
+    }
+  }
+  return {
+    positionName: positionName || null,
+    dutyName: dutyName || null,
+    employmentType: employmentType || null,
+    birthDate: birthDate || null,
+    hireDate: hireDate || null,
+  };
+}
+
 module.exports = async (req, res) => {
   const session = requireManage(req, res);
   if (!session) return;
@@ -84,6 +119,9 @@ module.exports = async (req, res) => {
       const users = await sql`
         SELECT u.id, u.login_id, u.name, u.email, u.department_id, u.role,
                u.workplace_id, u.approver_user_id, u.can_manage, u.created_at,
+               u.position_name, u.duty_name, u.employment_type,
+               to_char(u.birth_date, 'YYYY-MM-DD') AS birth_date,
+               to_char(u.hire_date, 'YYYY-MM-DD') AS hire_date,
                d.code AS department_code, d.name AS department_name,
                w.code AS workplace_code, w.name AS workplace_name,
                a.name AS approver_name
@@ -123,6 +161,12 @@ module.exports = async (req, res) => {
           approverName: u.approver_name,
           canManage: u.can_manage === true,
           createdAt: u.created_at,
+          // 人事プロフィール（この一覧は requireManage 済み＝ポータル管理者のみが受け取る）
+          positionName: u.position_name,
+          dutyName: u.duty_name,
+          birthDate: u.birth_date,
+          hireDate: u.hire_date,
+          employmentType: u.employment_type,
           provisions: byUser.get(u.id) || [],
         }))
       );
@@ -162,14 +206,19 @@ module.exports = async (req, res) => {
       }
       const v = await validateRoleWorkplaceApprover(sql, res, { role, workplaceId, approverUserId, departmentId, selfId: null });
       if (!v) return;
+      const prof = parseProfileFields(body, res);
+      if (!prof) return;
       const dup = await sql`SELECT 1 FROM pf_portal_users WHERE login_id = ${loginId} LIMIT 1`;
       if (dup.length > 0) {
         res.status(409).json({ message: "この社員番号（ID）は登録済みです" });
         return;
       }
       const inserted = await sql`
-        INSERT INTO pf_portal_users (login_id, name, email, department_id, role, workplace_id, approver_user_id)
-        VALUES (${loginId}, ${name}, ${email || null}, ${departmentId}, ${v.role}, ${v.workplaceId}, ${v.approverUserId})
+        INSERT INTO pf_portal_users
+          (login_id, name, email, department_id, role, workplace_id, approver_user_id,
+           position_name, duty_name, birth_date, hire_date, employment_type)
+        VALUES (${loginId}, ${name}, ${email || null}, ${departmentId}, ${v.role}, ${v.workplaceId}, ${v.approverUserId},
+                ${prof.positionName}, ${prof.dutyName}, ${prof.birthDate}, ${prof.hireDate}, ${prof.employmentType})
         RETURNING id, login_id, name, email, department_id, role, workplace_id, approver_user_id`;
       const user = inserted[0];
 
@@ -267,12 +316,17 @@ module.exports = async (req, res) => {
         return;
       }
 
+      const prof = parseProfileFields(body, res);
+      if (!prof) return;
       const updated = await sql`
         UPDATE pf_portal_users
         SET name = ${name}, email = ${email || null}, department_id = ${departmentId},
             role = ${v.role}, workplace_id = ${v.workplaceId}, approver_user_id = ${v.approverUserId},
             can_manage = ${canManage},
-            manage_password_hash = COALESCE(${managePasswordHash}, manage_password_hash)
+            manage_password_hash = COALESCE(${managePasswordHash}, manage_password_hash),
+            position_name = ${prof.positionName}, duty_name = ${prof.dutyName},
+            birth_date = ${prof.birthDate}, hire_date = ${prof.hireDate},
+            employment_type = ${prof.employmentType}
         WHERE id = ${id}
         RETURNING id, login_id, name, email, department_id, role, workplace_id, approver_user_id, can_manage`;
       const user = updated[0];
