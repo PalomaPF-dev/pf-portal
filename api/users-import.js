@@ -1,6 +1,7 @@
 // CSV 一括登録 API（管理者専用）。
 // POST {rows:[{loginId,name,departmentCode?,departmentName?,workplaceCode?,workplaceName?,role?,email?,
-//              positionName?,dutyName?,birthDate?,hireDate?,employmentType?}]}（1リクエスト最大200行）
+//              approverLoginId?,positionName?,dutyName?,birthDate?,hireDate?,employmentType?}]}
+//      （1リクエスト最大200行）
 //  - 部署の解決は「部署コード優先」→ コード空欄なら部署名で照合。どちらも不一致なら error
 //  - 職場は職場コードで照合（任意）。未登録のコードでも職場名があれば部署配下に自動作成する
 //    （名簿CSVからの一括展開用）。登録済みコードが別部署配下なら error
@@ -9,7 +10,10 @@
 //    だけを更新して status:'updated'（部署・職場・権限・アカウントは変更しない）。あわせて DB の
 //    現在値でアプリへ再連携する（承認者＝職場の管理者の変更を行き渡らせるため）。
 //    同一バッチ内の重複は status:'duplicate'
-//  - 承認者は 本人指定 → 職場の管理者（指定） → 職場に所属する管理者（社員番号順で最初） の順で解決
+//  - 承認者は 名簿の承認者社員番号（approverLoginId）→ 職場の管理者（指定）→ 職場に所属する管理者
+//    （社員番号順で最初）の順で解決。管理者本人の承認者は名簿での明示指定のみ。
+//    承認者は同じリクエスト内で登録した人も対象（INSERT 後に解決する）。前のチャンクにいない
+//    承認者は解決できないため、クライアントは取り込み後に /api/users-approvers で再設定する
 //  - 生年月日・入社年月日・雇用体系は個人情報。管理者専用APIの外には出さないこと（年齢は保存しない）
 //  - 新規は INSERT → プロビジョニング（アプリごとにまとめて1リクエスト）
 // レスポンス: { rows: [{loginId,name,status,message?,apps:[{app,status,inviteUrl}]}] }
@@ -88,13 +92,16 @@ module.exports = async (req, res) => {
       const workplaceName = String((r && r.workplaceName) || "").trim();
       const roleRaw = String((r && r.role) || "").trim();
       const email = String((r && r.email) || "").trim();
+      // 承認者（名簿の「管理者」列）。自分自身の指定は「指定なし」として扱う
+      let approverLoginId = String((r && r.approverLoginId) || "").trim();
+      if (approverLoginId === loginId || !LOGIN_ID_RE.test(approverLoginId)) approverLoginId = "";
       const positionName = String((r && r.positionName) || "").trim().slice(0, 100) || null;
       const dutyName = String((r && r.dutyName) || "").trim().slice(0, 100) || null;
       const employmentType = String((r && r.employmentType) || "").trim().slice(0, 100) || null;
       const birthDate = normalizeDate(r && r.birthDate);
       const hireDate = normalizeDate(r && r.hireDate);
       const item = {
-        loginId, name, departmentCode, departmentName, workplaceCode, workplaceName, email,
+        loginId, name, departmentCode, departmentName, workplaceCode, workplaceName, email, approverLoginId,
         positionName, dutyName, employmentType, birthDate, hireDate,
         role: "member", status: null, message: null, dept: null, workplace: null,
       };
@@ -280,6 +287,44 @@ module.exports = async (req, res) => {
       ORDER BY workplace_id, login_id`;
     const wpAdminByWpId = new Map(wpAdmins.map((r) => [r.workplace_id, r.login_id]));
 
+    // ===== 名簿の承認者（「管理者」列）を解決して保存する =====
+    // INSERT 後に引くため、同じリクエストで登録した管理者も承認者にできる。
+    // 承認者が見つからない／一般権限の行は、その行だけ承認者未設定とし理由をメッセージに載せる。
+    for (const it of toInsert) {
+      const u = insertedByLogin.get(it.loginId);
+      if (u) { it.userId = u.id; it.status = "created"; }
+    }
+    const needApprover = items.filter((it) => it.approverLoginId && (it.status === "created" || it.status === "updated"));
+    const approverByLogin = new Map();
+    if (needApprover.length > 0) {
+      const logins = Array.from(new Set(needApprover.map((it) => it.approverLoginId)));
+      const found = await sql`SELECT id, login_id, role FROM pf_portal_users WHERE login_id = ANY(${logins}::text[])`;
+      for (const a of found) approverByLogin.set(a.login_id, a);
+    }
+    const apvTargets = [], apvValues = [];
+    for (const it of needApprover) {
+      const a = approverByLogin.get(it.approverLoginId);
+      if (!a) {
+        it.approverNote = `承認者（社員番号 ${it.approverLoginId}）が名簿にないため未設定です`;
+        continue;
+      }
+      if (a.role !== "admin") {
+        it.approverNote = `承認者（社員番号 ${it.approverLoginId}）が一般権限のため未設定です`;
+        continue;
+      }
+      it.approverUserId = a.id;
+      it.approverResolved = a.login_id;
+      apvTargets.push(it.loginId);
+      apvValues.push(a.id);
+    }
+    if (apvTargets.length > 0) {
+      await sql`
+        UPDATE pf_portal_users u
+        SET approver_user_id = v.approver_id
+        FROM unnest(${apvTargets}::text[], ${apvValues}::uuid[]) AS v(login_id, approver_id)
+        WHERE u.login_id = v.login_id`;
+    }
+
     // プロビジョニング（アプリごとにまとめて実行）
     const provisionTargets = [];
     for (const it of toInsert) {
@@ -289,13 +334,12 @@ module.exports = async (req, res) => {
         it.message = "この社員番号（ID）は登録済みのためスキップしました";
         continue;
       }
-      it.userId = u.id;
-      it.status = "created";
-      // 承認者は職場の管理者（未指定なら職場所属の管理者）を引き継ぐ
-      // （管理者本人には承認者を付けない・自分自身も承認者にしない）
-      let approverLoginId = it.role === "admin" || !it.workplace
-        ? null
-        : it.workplace.admin_login_id || wpAdminByWpId.get(it.workplace.id) || null;
+      // 承認者は 名簿の指定 → 職場の管理者 → 職場所属の管理者 の順
+      // （管理者は名簿の指定のみ・自分自身は承認者にしない）
+      let approverLoginId = it.approverResolved
+        || (it.role === "admin" || !it.workplace
+          ? null
+          : it.workplace.admin_login_id || wpAdminByWpId.get(it.workplace.id) || null);
       if (approverLoginId === u.login_id) approverLoginId = null;
       provisionTargets.push({
         id: u.id,
@@ -331,8 +375,9 @@ module.exports = async (req, res) => {
         if (!it) continue;
         it.userId = u.id;
         const role = u.role === "admin" ? "admin" : "member";
-        let approverLoginId = role === "admin" ? null
-          : u.approver_login_id || u.wp_admin_login_id || wpAdminByWpId.get(u.workplace_id) || null;
+        let approverLoginId = it.approverResolved || (role === "admin"
+          ? u.approver_login_id || null
+          : u.approver_login_id || u.wp_admin_login_id || wpAdminByWpId.get(u.workplace_id) || null);
         if (approverLoginId === u.login_id) approverLoginId = null;
         provisionTargets.push({
           id: u.id,
@@ -353,7 +398,9 @@ module.exports = async (req, res) => {
         loginId: it.loginId,
         name: it.name,
         status: it.status,
-        message: it.message || undefined,
+        message: [it.message, it.approverNote].filter(Boolean).join(" / ") || undefined,
+        // 承認者が解決できたかをクライアントへ返す（後段の /api/users-approvers の対象判定に使う）
+        approverSet: it.approverResolved ? true : undefined,
         apps: it.userId ? provisionResults.get(it.userId) || [] : [],
       })),
     });

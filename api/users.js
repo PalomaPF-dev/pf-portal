@@ -21,11 +21,13 @@ function normalizeRole(role) {
 
 // 承認者の解決: 本人の承認者指定 → 職場の管理者（指定） → その職場に所属する管理者権限ユーザー
 // （社員番号順で最初）→ null。「職場ごとに管理者が一般ユーザーの承認者になる」規則。
-async function resolveApproverLoginId(sql, approverUserId, workplaceId) {
+// 管理者本人の承認者は名簿での明示指定のみ（上位者を指すため、職場からの自動割り当てはしない）。
+async function resolveApproverLoginId(sql, approverUserId, workplaceId, role) {
   if (approverUserId) {
     const rows = await sql`SELECT login_id FROM pf_portal_users WHERE id = ${approverUserId} LIMIT 1`;
     if (rows.length > 0) return rows[0].login_id;
   }
+  if (role === "admin") return null;
   if (workplaceId) {
     const rows = await sql`
       SELECT a.login_id
@@ -61,10 +63,9 @@ async function validateRoleWorkplaceApprover(sql, res, { role, workplaceId, appr
       return null;
     }
   }
-  if (role === "admin") {
-    // 管理者に承認者は不要（一般ユーザーのみ意味を持つ）
-    approverUserId = null;
-  } else if (approverUserId) {
+  // 承認者は管理者にも指定できる（管理者本人の申請は上位者へ回すため）。
+  // 未指定のときの職場からの自動割り当ては一般ユーザーのみ（resolveApproverLoginId 参照）。
+  if (approverUserId) {
     if (!isUuid(approverUserId)) { res.status(400).json({ message: "approverUserId が不正です" }); return null; }
     if (selfId && approverUserId === selfId) {
       res.status(400).json({ message: "自分自身を承認者に設定することはできません" });
@@ -234,8 +235,7 @@ module.exports = async (req, res) => {
       // 工場所属なら工場名を各アプリへ引き継ぐ（アプリ側でデータ表示を自工場に制限）
       const factory = dept[0].kind === "factory" ? dept[0].name : null;
       // 承認者を login_id に解決（本人指定 → 職場の管理者 → 職場所属の管理者 → なし）。
-      // 管理者本人には承認者を付けない・自分自身も承認者にしない。
-      let approverLoginId = v.role === "admin" ? null : await resolveApproverLoginId(sql, v.approverUserId, v.workplaceId);
+      let approverLoginId = await resolveApproverLoginId(sql, v.approverUserId, v.workplaceId, v.role);
       if (approverLoginId === user.login_id) approverLoginId = null;
       const results = await provisionUsers(sql, [
         { id: user.id, loginId: user.login_id, name: user.name, email: user.email, apps, factory, role: v.role, approverLoginId },
@@ -343,7 +343,7 @@ module.exports = async (req, res) => {
       // 更新後の内容で再プロビジョニング（POST と同じフロー。権限・承認者の変更を各アプリへ反映）
       const apps = Array.isArray(dept[0].apps) ? dept[0].apps : [];
       const factory = dept[0].kind === "factory" ? dept[0].name : null;
-      let approverLoginId = v.role === "admin" ? null : await resolveApproverLoginId(sql, v.approverUserId, v.workplaceId);
+      let approverLoginId = await resolveApproverLoginId(sql, v.approverUserId, v.workplaceId, v.role);
       if (approverLoginId === user.login_id) approverLoginId = null;
       const results = await provisionUsers(sql, [
         { id: user.id, loginId: user.login_id, name: user.name, email: user.email, apps, factory, role: v.role, approverLoginId },
