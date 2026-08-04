@@ -291,6 +291,7 @@
           <button class="ghost" id="dToggleAll" type="button" style="margin-top:0">すべて展開</button>
           <div class="sp"></div>
           <button class="ghost" id="deptCsvBtn" type="button" style="margin-top:0">CSVで一括設定</button>
+          <button class="ghost" id="wpCsvBtn" type="button" style="margin-top:0">職場CSVで一括設定</button>
           <button class="ghost" id="deptAddBtn" type="button" style="margin-top:0">＋ 部署を追加</button>
         </div>
 
@@ -320,6 +321,33 @@
           </div>
           <button class="primary" id="deptCsvRun" type="button">一括設定を実行</button>
           <div class="msg hidden" id="deptCsvProgress"></div>
+        </div>
+
+        <!-- 職場のCSV一括設定 -->
+        <div class="card hidden" id="wpCsvCard">
+          <h2>職場をCSVで一括設定</h2>
+          <p style="font-size:12px;color:var(--sub);line-height:1.9">
+            1行目はヘッダー <b>部署コード,部署名,職場コード,職場名,並び順</b>（部署名・並び順は任意）。文字コードは UTF-8 / Shift_JIS のどちらでも読み込めます。<br />
+            部署は<b>部署コード優先</b>で照合します（先に部署を登録してください）。<b>職場コードで照合</b>し、既にあれば名称・所属部署を更新・無ければ新規作成します。
+            <a href="#" class="plain" id="wpCsvTemplate">テンプレートCSVをダウンロード</a>
+          </p>
+          <label class="f">CSVファイル</label>
+          <input type="file" id="wpCsvFile" class="filebox" accept=".csv,text/csv" />
+          <div class="msg err hidden" id="wpCsvMsg"></div>
+        </div>
+
+        <div class="card hidden" id="wpCsvPreviewCard">
+          <h2>プレビュー（<span id="wpCsvCount">0</span>行）</h2>
+          <div class="tblwrap">
+            <table class="tbl">
+              <thead>
+                <tr><th>#</th><th>部署コード</th><th>職場コード</th><th>職場名</th><th>並び順</th><th>チェック</th></tr>
+              </thead>
+              <tbody id="wpCsvRows"></tbody>
+            </table>
+          </div>
+          <button class="primary" id="wpCsvRun" type="button">一括設定を実行</button>
+          <div class="msg hidden" id="wpCsvProgress"></div>
         </div>
 
         <div class="card hidden" id="deptFormCard">
@@ -1854,6 +1882,149 @@
         prog.textContent = e.message || "一括設定に失敗しました";
       } finally {
         $("deptCsvRun").disabled = false;
+      }
+    });
+
+    // ===== 職場のCSV一括設定 =====
+    const WP_CSV_HEADER = ["部署コード", "部署名", "職場コード", "職場名", "並び順"];
+    let wpCsvRows = [];
+
+    $("wpCsvBtn").addEventListener("click", () => {
+      const card = $("wpCsvCard");
+      const show = card.classList.contains("hidden");
+      card.classList.toggle("hidden", !show);
+      if (!show) {
+        $("wpCsvPreviewCard").classList.add("hidden");
+        $("wpCsvFile").value = "";
+      }
+    });
+
+    $("wpCsvTemplate").addEventListener("click", (e) => {
+      e.preventDefault();
+      // 現在の登録内容をそのまま書き出す。編集して読み込ませれば一括更新になる。
+      const deptById = new Map(departments.map((d) => [d.id, d]));
+      const body = workplaces.map((w) => {
+        const d = deptById.get(w.departmentId) || {};
+        return [d.code || "", d.name || "", w.code || "", w.name, w.sort == null ? "" : String(w.sort)];
+      });
+      downloadCsv("portal-workplaces.csv", [WP_CSV_HEADER].concat(
+        body.length > 0 ? body : [["D001", "生産管理部", "W001", "管理課", "1"]]));
+    });
+
+    function wpCsvToObjects(rows) {
+      if (rows.length === 0) return [];
+      let idx = { deptCode: 0, deptName: 1, code: 2, name: 3, sort: 4 };
+      let start = 0;
+      const head = rows[0].map((c) => String(c).trim());
+      if (head.some((h) => h.includes("職場コード"))) {
+        start = 1;
+        // 「コード」を含む列が複数あるため完全一致を優先する
+        idx = {
+          deptCode: head.findIndex((h) => h === "部署コード"),
+          deptName: head.findIndex((h) => h === "部署名" || h === "部署名称" || h === "部署"),
+          code: head.findIndex((h) => h === "職場コード"),
+          name: head.findIndex((h) => h === "職場名" || h === "職場名称"),
+          sort: head.findIndex((h) => h === "並び順" || h.includes("並び")),
+        };
+      }
+      const cell = (r, i) => (i >= 0 ? String(r[i] || "").trim() : "");
+      const out = [];
+      for (let i = start; i < rows.length; i++) {
+        const r = rows[i];
+        out.push({
+          departmentCode: cell(r, idx.deptCode),
+          departmentName: cell(r, idx.deptName),
+          code: cell(r, idx.code),
+          name: cell(r, idx.name),
+          sort: cell(r, idx.sort),
+        });
+      }
+      return out;
+    }
+
+    function wpPrecheck(r, seen) {
+      if (!r.code) return { ok: false, note: "職場コードが空です" };
+      if (!/^[A-Za-z0-9_-]+$/.test(r.code)) return { ok: false, note: "職場コードに使えない文字があります" };
+      if (seen.has(r.code)) return { ok: false, note: "ファイル内で職場コードが重複しています" };
+      if (!r.name) return { ok: false, note: "職場名が空です" };
+      const dept = r.departmentCode
+        ? departments.find((d) => String(d.code || "") === r.departmentCode)
+        : departments.find((d) => d.name === r.departmentName);
+      if (!dept) return { ok: false, note: "部署が見つかりません（先に部署を登録）" };
+      seen.add(r.code);
+      const exists = workplaces.some((w) => String(w.code || "") === r.code);
+      return { ok: true, note: exists ? "更新" : "新規作成" };
+    }
+
+    $("wpCsvFile").addEventListener("change", async () => {
+      const msg = $("wpCsvMsg");
+      msg.classList.add("hidden");
+      $("wpCsvPreviewCard").classList.add("hidden");
+      const file = $("wpCsvFile").files && $("wpCsvFile").files[0];
+      if (!file) return;
+      try {
+        const text = await decodeCsvFile(file);
+        wpCsvRows = wpCsvToObjects(parseCsv(text));
+        if (wpCsvRows.length === 0) {
+          msg.textContent = "CSVにデータ行がありません";
+          msg.classList.remove("hidden");
+          return;
+        }
+        $("wpCsvCount").textContent = String(wpCsvRows.length);
+        const seen = new Set();
+        $("wpCsvRows").replaceChildren(...wpCsvRows.map((r, i) => {
+          const chk = wpPrecheck(r, seen);
+          const tr = document.createElement("tr");
+          tr.innerHTML =
+            '<td class="sub">' + (i + 1) + "</td>" +
+            "<td><b>" + escHtml(r.departmentCode || r.departmentName) + "</b></td>" +
+            "<td><b>" + escHtml(r.code) + "</b></td>" +
+            "<td>" + escHtml(r.name) + "</td>" +
+            "<td>" + escHtml(r.sort) + "</td>" +
+            "<td>" + (chk.ok
+              ? '<span class="badge b-created">' + escHtml(chk.note) + "</span>"
+              : '<span class="badge b-error">' + escHtml(chk.note) + "</span>") + "</td>";
+          return tr;
+        }));
+        $("wpCsvPreviewCard").classList.remove("hidden");
+      } catch (e) {
+        msg.textContent = "CSVの読み込みに失敗しました: " + e.message;
+        msg.classList.remove("hidden");
+      }
+    });
+
+    $("wpCsvRun").addEventListener("click", async () => {
+      if (wpCsvRows.length === 0) return;
+      const prog = $("wpCsvProgress");
+      prog.className = "msg";
+      prog.classList.remove("hidden");
+      $("wpCsvRun").disabled = true;
+      try {
+        // サーバーの1リクエスト上限（200行）に合わせて分割送信する
+        const CHUNK = 100;
+        const all = [];
+        for (let i = 0; i < wpCsvRows.length; i += CHUNK) {
+          prog.textContent = "設定中… " + Math.min(i + CHUNK, wpCsvRows.length) + " / " + wpCsvRows.length + " 行";
+          const part = wpCsvRows.slice(i, i + CHUNK).map((r) => ({
+            departmentCode: r.departmentCode, departmentName: r.departmentName,
+            code: r.code, name: r.name, sort: r.sort,
+          }));
+          const res = await api("/api/workplaces-import", { method: "POST", body: JSON.stringify({ rows: part }) });
+          all.push(...(res.rows || []));
+        }
+        const n = (st) => all.filter((x) => x.status === st).length;
+        const errs = all.filter((x) => x.status === "error");
+        prog.className = "msg" + (errs.length > 0 ? " err" : " ok");
+        prog.textContent =
+          "完了: 新規 " + n("created") + " 件 / 更新 " + n("updated") + " 件" +
+          (errs.length > 0 ? " / エラー " + errs.length + " 件（" + errs.slice(0, 10).map((x) => x.code + ": " + x.message).join(" ／ ") + (errs.length > 10 ? " ほか" : "") + "）" : "");
+        await Promise.all([loadDepartments(), loadWorkplaces()]);
+        renderDeptTable();
+      } catch (e) {
+        prog.className = "msg err";
+        prog.textContent = e.message || "一括設定に失敗しました";
+      } finally {
+        $("wpCsvRun").disabled = false;
       }
     });
 
