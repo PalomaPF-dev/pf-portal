@@ -9,7 +9,7 @@
 //   PATCH ?mine=1（本人）: {id} で自分の回答を既読にする。
 const { requireSql, ensureSchema, readBody, isUuid } = require("../lib/db");
 const { verifyUserSession } = require("../lib/portalAuth");
-const { requireManage } = require("../lib/portalAuth");
+const { requireManageSession } = require("../lib/portalAuth");
 
 // 問い合わせ分類（フロントの選択肢と一致させる）
 const CATEGORIES = [
@@ -165,7 +165,7 @@ module.exports = async (req, res) => {
 
     // ===== 一覧（管理者） =====
     if (req.method === "GET") {
-      if (!requireManage(req, res)) return;
+      if (!(await requireManageSession(req, res, sql))) return;
       const rows = await sql`
         SELECT id, app, category, login_id, name, message, status, reply, replied_at, read_at, created_at
         FROM pf_portal_inquiries
@@ -197,7 +197,7 @@ module.exports = async (req, res) => {
 
     // ===== 回答の保存・対応状態の更新（管理者） =====
     if (req.method === "PATCH") {
-      if (!requireManage(req, res)) return;
+      if (!(await requireManageSession(req, res, sql))) return;
       const body = readBody(req);
       const id = body.id;
       if (!isUuid(id)) { res.status(400).json({ message: "IDが不正です" }); return; }

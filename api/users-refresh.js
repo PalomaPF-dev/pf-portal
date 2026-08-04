@@ -3,7 +3,7 @@
 // [{app,status,inviteUrl,passwordSet}] を返す（pf_portal_provisions も更新される）。
 // ユーザー行の「状況更新」ボタンから使用。フィールドは何も変更しない。
 const { requireSql, ensureSchema, readBody, isUuid } = require("../lib/db");
-const { requireManage } = require("../lib/portalAuth");
+const { requireManageSession } = require("../lib/portalAuth");
 const { provisionUsers } = require("../lib/provision");
 
 // 承認者の解決: 本人の承認者指定 → 職場の管理者（指定） → 職場所属の管理者（社員番号順で最初）
@@ -37,9 +37,9 @@ module.exports = async (req, res) => {
     res.status(405).json({ message: "Method not allowed" });
     return;
   }
-  if (!requireManage(req, res)) return;
   const sql = requireSql(res);
   if (!sql) return;
+  if (!(await requireManageSession(req, res, sql))) return;
 
   try {
     await ensureSchema(sql);

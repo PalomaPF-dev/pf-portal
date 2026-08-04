@@ -5,7 +5,7 @@
 //  - 部署名の重複、同一バッチ内のコード重複は error にして他の行は処理を続ける
 // レスポンス: { rows: [{code,name,status:'created'|'updated'|'error',message?}] }
 const { requireSql, ensureSchema, readBody, ALL_APP_KEYS } = require("../lib/db");
-const { requireManage } = require("../lib/portalAuth");
+const { requireManageSession } = require("../lib/portalAuth");
 
 const MAX_ROWS = 200;
 const CODE_RE = /^[A-Za-z0-9_-]+$/;
@@ -30,9 +30,9 @@ module.exports = async (req, res) => {
     res.status(405).json({ message: "Method not allowed" });
     return;
   }
-  if (!requireManage(req, res)) return;
   const sql = requireSql(res);
   if (!sql) return;
+  if (!(await requireManageSession(req, res, sql))) return;
 
   try {
     await ensureSchema(sql);

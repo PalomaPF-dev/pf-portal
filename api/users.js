@@ -5,7 +5,7 @@
 //        ※ canManage / managePassword の変更はマスターセッションのみ（設定担当者は不可）
 // DELETE {id} 名簿から削除（※各アプリ側のアカウントは削除しない）
 const { requireSql, ensureSchema, readBody, isUuid } = require("../lib/db");
-const { requireManage, hashManagePassword } = require("../lib/portalAuth");
+const { requireManageSession, hashManagePassword } = require("../lib/portalAuth");
 const { provisionUsers } = require("../lib/provision");
 
 const LOGIN_ID_RE = /^[A-Za-z0-9_@.-]+$/;
@@ -116,10 +116,10 @@ function parseProfileFields(body, res) {
 }
 
 module.exports = async (req, res) => {
-  const session = requireManage(req, res);
-  if (!session) return;
   const sql = requireSql(res);
   if (!sql) return;
+  const session = await requireManageSession(req, res, sql);
+  if (!session) return;
 
   try {
     await ensureSchema(sql);
@@ -170,7 +170,7 @@ module.exports = async (req, res) => {
           approverName: u.approver_name,
           canManage: u.can_manage === true,
           createdAt: u.created_at,
-          // 人事プロフィール（この一覧は requireManage 済み＝ポータル管理者のみが受け取る）
+          // 人事プロフィール（この一覧はポータル管理権限の確認済み＝管理画面の利用者のみが受け取る）
           positionName: u.position_name,
           dutyName: u.duty_name,
           birthDate: u.birth_date,

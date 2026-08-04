@@ -344,7 +344,7 @@
       <div class="hright">
         <span class="huser hidden" id="huser"></span>
         <button class="hlogout hidden" id="logoutBtn" type="button">ログアウト</button>
-        <a class="hadmin" href="/admin.html">管理者</a>
+        <a class="hadmin" id="adminLink" href="/admin.html">ポータル管理</a>
       </div>
     </div>
   </header>
@@ -516,6 +516,10 @@
       if (on) $("huser").textContent = sess.name + " さん（" + affLabel(sess) + "）";
       $("huser").classList.toggle("hidden", !on);
       $("logoutBtn").classList.toggle("hidden", !on);
+      // 管理画面への導線は「ポータル管理権限」を持つ人にだけ出す。
+      // 承認フロー上の管理者権限では管理画面に入れないため、リンクも見せない。
+      // 未ログイン時は表示したまま（マスターパスワードでの管理ログイン導線）。
+      $("adminLink").classList.toggle("hidden", on && !sess.canManage);
     }
 
     // ===== アプリ一覧（セッションの所属部署アプリのみ表示） =====
