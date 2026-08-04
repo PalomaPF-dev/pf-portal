@@ -489,9 +489,10 @@
       hoju:     { name: "補充計画", desc: "輸入部材の在庫補充・船便/AIR", url: "https://hoju.paloma-pf.com" },
       tenchu:   { name: "転注管理", desc: "生産場所変更・引継ぎ・BOM変更", url: "https://tenchu.paloma-pf.com" },
       purchasing:{ name: "購買単価", desc: "購入品単価・承認・MC取込出力", url: "https://purchasing.paloma-pf.com" },
+      jinji:    { name: "人事管理", desc: "人事情報・組織図・異動申請（管理者専用）", url: "https://jinji.paloma-pf.com" },
     };
     // SSOで自動ログインできるアプリ（zumen 以外）
-    const SSO_APPS = new Set(["keikaku","nippou","sekisai","keisoku","setsubi","hinshitsu","zaiko","kanagata","hoju","tenchu","purchasing"]);
+    const SSO_APPS = new Set(["keikaku","nippou","sekisai","keisoku","setsubi","hinshitsu","zaiko","kanagata","hoju","tenchu","purchasing","jinji"]);
     // サンプル事例（デモ）を表示できるアプリ。<app>/login?demo=1 でサンプルデータ入りのデモが直接開く。
     // nippou(生産日報) はデモ機能なし、zumen は端末内アプリのため対象外。
     const DEMO_APPS = new Set(["keikaku","sekisai","keisoku","setsubi","hinshitsu","zaiko","kanagata","hoju","tenchu"]);
