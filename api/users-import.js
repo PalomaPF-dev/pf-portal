@@ -6,8 +6,10 @@
 //    （名簿CSVからの一括展開用）。登録済みコードが別部署配下なら error
 //  - 権限は 管理者/admin・一般/member。空欄なら一般(member)。旧「作業者/worker」は一般として取り込む
 //  - login_id が DB 既存の場合は、人事プロフィール項目（役職・職務・生年月日・入社年月日・雇用体系）
-//    だけを更新して status:'updated'（部署・職場・権限・アカウントは変更しない）。
+//    だけを更新して status:'updated'（部署・職場・権限・アカウントは変更しない）。あわせて DB の
+//    現在値でアプリへ再連携する（承認者＝職場の管理者の変更を行き渡らせるため）。
 //    同一バッチ内の重複は status:'duplicate'
+//  - 承認者は 本人指定 → 職場の管理者（指定） → 職場に所属する管理者（社員番号順で最初） の順で解決
 //  - 生年月日・入社年月日・雇用体系は個人情報。管理者専用APIの外には出さないこと（年齢は保存しない）
 //  - 新規は INSERT → プロビジョニング（アプリごとにまとめて1リクエスト）
 // レスポンス: { rows: [{loginId,name,status,message?,apps:[{app,status,inviteUrl}]}] }
@@ -230,7 +232,7 @@ module.exports = async (req, res) => {
             employment_type = COALESCE(${it.employmentType}, employment_type)
         WHERE login_id = ${it.loginId}`;
       it.status = "updated";
-      it.message = "登録済みのため人事項目のみ更新しました（部署・権限・アカウントは変更していません）";
+      it.message = "登録済みのため人事項目を更新し、アプリへ再連携しました（部署・権限・アカウントは変更していません）";
     }
 
     // 新規をまとめて INSERT
@@ -269,6 +271,15 @@ module.exports = async (req, res) => {
       insertedByLogin = new Map(inserted.map((u) => [u.login_id, u]));
     }
 
+    // 職場の管理者が未指定の職場は、その職場に所属する管理者権限ユーザー（社員番号順で最初）が
+    // 既定の承認者になる。INSERT 後に引くことで、同じCSVで登録した管理者も対象に含める。
+    const wpAdmins = await sql`
+      SELECT DISTINCT ON (workplace_id) workplace_id, login_id
+      FROM pf_portal_users
+      WHERE role = 'admin' AND workplace_id IS NOT NULL
+      ORDER BY workplace_id, login_id`;
+    const wpAdminByWpId = new Map(wpAdmins.map((r) => [r.workplace_id, r.login_id]));
+
     // プロビジョニング（アプリごとにまとめて実行）
     const provisionTargets = [];
     for (const it of toInsert) {
@@ -280,8 +291,11 @@ module.exports = async (req, res) => {
       }
       it.userId = u.id;
       it.status = "created";
-      // 承認者は職場の管理者を引き継ぐ（管理者本人には承認者を付けない・自分自身も承認者にしない）
-      let approverLoginId = it.role === "admin" || !it.workplace ? null : it.workplace.admin_login_id || null;
+      // 承認者は職場の管理者（未指定なら職場所属の管理者）を引き継ぐ
+      // （管理者本人には承認者を付けない・自分自身も承認者にしない）
+      let approverLoginId = it.role === "admin" || !it.workplace
+        ? null
+        : it.workplace.admin_login_id || wpAdminByWpId.get(it.workplace.id) || null;
       if (approverLoginId === u.login_id) approverLoginId = null;
       provisionTargets.push({
         id: u.id,
@@ -294,6 +308,43 @@ module.exports = async (req, res) => {
         role: it.role,
         approverLoginId,
       });
+    }
+
+    // 既存ユーザーも DB 上の現在値（部署・職場・権限・承認者）でアプリへ再連携する。
+    // 後から管理者を含むCSVを取り込み直したときに、一般ユーザーの承認者が各アプリへ行き渡るようにするため。
+    if (toUpdate.length > 0) {
+      const updateLoginIds = toUpdate.filter((it) => it.status === "updated").map((it) => it.loginId);
+      const cur = updateLoginIds.length > 0 ? await sql`
+        SELECT u.id, u.login_id, u.name, u.email, u.role, u.workplace_id,
+               ap.login_id AS approver_login_id,
+               w.admin_user_id, wa.login_id AS wp_admin_login_id,
+               d.name AS department_name, d.kind AS department_kind, d.apps AS department_apps
+        FROM pf_portal_users u
+        LEFT JOIN pf_portal_users ap ON ap.id = u.approver_user_id
+        LEFT JOIN pf_portal_workplaces w ON w.id = u.workplace_id
+        LEFT JOIN pf_portal_users wa ON wa.id = w.admin_user_id
+        LEFT JOIN pf_portal_departments d ON d.id = u.department_id
+        WHERE u.login_id = ANY(${updateLoginIds}::text[])` : [];
+      const itByLogin = new Map(toUpdate.map((it) => [it.loginId, it]));
+      for (const u of cur) {
+        const it = itByLogin.get(u.login_id);
+        if (!it) continue;
+        it.userId = u.id;
+        const role = u.role === "admin" ? "admin" : "member";
+        let approverLoginId = role === "admin" ? null
+          : u.approver_login_id || u.wp_admin_login_id || wpAdminByWpId.get(u.workplace_id) || null;
+        if (approverLoginId === u.login_id) approverLoginId = null;
+        provisionTargets.push({
+          id: u.id,
+          loginId: u.login_id,
+          name: u.name,
+          email: u.email,
+          apps: Array.isArray(u.department_apps) ? u.department_apps : [],
+          factory: u.department_kind === "factory" ? u.department_name : null,
+          role,
+          approverLoginId,
+        });
+      }
     }
     const provisionResults = await provisionUsers(sql, provisionTargets);
 

@@ -132,6 +132,24 @@
     }
     table.tbl tr.grouphead button[aria-expanded="true"] .ghmark { transform: rotate(90deg); }
 
+    /* ユーザー一覧の職場小見出し（部署見出しの配下。クリックで開閉） */
+    table.tbl tr.wphead td { background: #fbfbf9; padding: 0; }
+    table.tbl tr.wphead button {
+      display: flex; align-items: center; gap: 7px; width: 100%;
+      background: none; border: 0; cursor: pointer; font: inherit; color: var(--ink);
+      padding: 6px 10px 6px 26px; text-align: left; font-weight: 600; font-size: 12px;
+    }
+    table.tbl tr.wphead button:hover { background: #f2f2ef; }
+    table.tbl tr.wphead .ghmark {
+      display: inline-flex; flex-shrink: 0; color: var(--sub);
+      transition: transform .12s ease;
+    }
+    table.tbl tr.wphead button[aria-expanded="true"] .ghmark { transform: rotate(90deg); }
+    table.tbl tr.wphead .cnt { color: var(--sub); font-weight: 400; font-size: 11px; }
+    table.tbl tr.wphead .apv { color: var(--sub); font-weight: 400; font-size: 11px; margin-left: auto; }
+    table.tbl tr.wphead .apv b { color: var(--ink); font-weight: 600; }
+    table.tbl tr.wphead .apv.none { color: #b45309; }
+
     /* 部署一覧: 部署コードのセルを、配下の職場を開閉するボタンにする */
     button.dtoggle {
       display: inline-flex; align-items: center; gap: 6px;
@@ -426,7 +444,7 @@
         <div class="msg err hidden" id="deptMsg"></div>
         <div class="note">
           <strong>表示アプリ</strong>は、ポータルの所属選択でこの部署を選んだときに表示されるアプリです。ユーザー登録時のアカウント発行もこの設定に基づきます（図面管理はアカウント不要のため発行対象外）。<br />
-          各部署の行の下に<strong>職場</strong>（部署配下の単位）を登録できます。職場に管理者を設定すると、その職場の一般ユーザーの承認者（既定）になります。
+          各部署の行の下に<strong>職場</strong>（部署配下の単位）を登録できます。職場に管理者を設定すると、その職場の一般ユーザーの承認者（既定）になります。管理者を設定していない職場は、<strong>その職場に所属する管理者権限のユーザー</strong>（複数いる場合は社員番号順で最初の1名）が自動的に承認者になります。
         </div>
       </div>
 
@@ -545,7 +563,7 @@
         <div class="msg err hidden" id="usersMsg"></div>
         <div class="note">
           発行状況: <span class="badge b-created">連携済み</span>=アプリにアカウント連携済み（ポータルから自動ログイン可） / <span class="badge b-error">エラー</span>=連携失敗（「状況更新」で再連携。解消しない場合はアプリの更新状況を確認）。アプリ個別のパスワード設定は不要です（ポータルで一括ログイン）。<br />
-          承認者を指定しない一般ユーザーは、所属する職場の管理者が承認者になります。<br />
+          承認者を指定しない一般ユーザーは、所属する職場の管理者（職場に管理者を指定していない場合は、<strong>その職場に所属する管理者権限のユーザー</strong>）が承認者になります。承認者の変更は各アプリへ自動で連携されます。<br />
           <strong>名簿から削除しても、各アプリ側のアカウントは削除されません。</strong>アプリ側のアカウント削除は各アプリの管理機能で行ってください。
         </div>
 
@@ -557,9 +575,9 @@
           <h2>CSVファイルから一括登録</h2>
           <p style="font-size:12px;color:var(--sub);line-height:1.9">
             1行目はヘッダー <b>社員番号,ユーザー名,部署コード,部署名,職場コード,職場名,権限,メール,役職名称,職務名称,生年月日,入社年月日,雇用体系名称</b>（社員番号・ユーザー名以外は任意）。文字コードは UTF-8 / Shift_JIS のどちらでも読み込めます。<br />
-            未登録の職場コードは、職場名があれば部署配下に自動作成します。<b>登録済みの社員番号は人事項目（役職・職務・生年月日・入社年月日・雇用体系）のみ更新</b>し、部署・権限・アカウントは変更しません。<br />
+            未登録の職場コードは、職場名があれば部署配下に自動作成します。<b>登録済みの社員番号は人事項目（役職・職務・生年月日・入社年月日・雇用体系）のみ更新</b>し、部署・権限・アカウントは変更しません（承認者を最新にするため、アプリへの連携はやり直します）。<br />
             生年月日・年齢（自動計算）・入社年月日・雇用体系名称は<b>ポータル管理者のみ閲覧</b>できる項目です（アプリには連携されません）。<br />
-            部署は<b>部署コード優先</b>で照合し、コードが空欄の行は部署名で照合します。<b>職場コード</b>を入れるとその職場に配属します（指定した部署の配下である必要があります）。<b>権限</b>は 管理者 / 一般 のいずれか（空欄なら一般。旧CSVの「作業者」は一般として取り込みます）。承認者は職場の管理者が自動で設定されます。登録済みの社員番号はスキップされます。
+            部署は<b>部署コード優先</b>で照合し、コードが空欄の行は部署名で照合します。<b>職場コード</b>を入れるとその職場に配属します（指定した部署の配下である必要があります）。<b>権限</b>は 管理者 / 一般 のいずれか（空欄なら一般。旧CSVの「作業者」は一般として取り込みます）。一般ユーザーの承認者は<b>同じ職場の管理者</b>が自動で設定されます。
             <a href="#" class="plain" id="csvTemplate">テンプレートCSVをダウンロード</a>
           </p>
           <label class="f">CSVファイル</label>
@@ -1236,7 +1254,7 @@
       const keep = selectedId !== undefined ? selectedId : sel.value;
       const o0 = document.createElement("option");
       o0.value = "";
-      o0.textContent = "職場の管理者に従う";
+      o0.textContent = "職場の管理者に従う（既定）";
       const opts = [o0];
       for (const u of adminUsers()) {
         if (editingUserId && u.id === editingUserId) continue; // 自分自身は承認者にできない
@@ -1301,12 +1319,28 @@
       return box;
     }
 
-    // 承認者セル: 本人指定 → 職場の管理者（既定） → 未設定
+    /**
+     * 職場の既定の承認者。職場の「管理者」を指定していればその人、未指定なら
+     * その職場に所属する管理者権限のユーザー（社員番号順で最初）。
+     * API 側（users / users-import / users-refresh）の解決規則と同じにしておくこと。
+     * 戻り値: { name, auto } または null（auto=true は所属からの自動選出）
+     */
+    function workplaceDefaultApprover(workplaceId) {
+      if (!workplaceId) return null;
+      const w = workplaces.find((x) => x.id === workplaceId);
+      if (w && w.adminName) return { name: w.adminName, auto: false };
+      const admins = users
+        .filter((x) => x.role === "admin" && x.workplaceId === workplaceId)
+        .sort((a, b) => cmpJa(a.loginId, b.loginId));
+      return admins.length > 0 ? { name: admins[0].name, auto: true } : null;
+    }
+
+    // 承認者セル: 本人指定 → 職場の管理者（指定） → 職場所属の管理者（自動） → 未設定
     function approverCellHtml(u) {
       if (u.role === "admin") return '<span class="sub">—</span>';
       if (u.approverName) return esc(u.approverName);
-      const w = u.workplaceId ? workplaces.find((x) => x.id === u.workplaceId) : null;
-      if (w && w.adminName) return esc(w.adminName) + ' <span class="sub">（職場管理者）</span>';
+      const d = workplaceDefaultApprover(u.workplaceId);
+      if (d) return esc(d.name) + ' <span class="sub">' + (d.auto ? "（職場の管理者・自動）" : "（職場管理者）") + "</span>";
       return '<span class="sub">未設定</span>';
     }
 
@@ -1390,6 +1424,8 @@
 
     // 開いている部署の集合。既定は空＝すべて折りたたみ（部署の一覧として見せる）
     const expandedDepts = new Set();
+    // 折りたたんだ職場小見出しの集合（キー: 部署キー + "::" + 職場キー）。既定は開いた状態
+    const collapsedWps = new Set();
 
     // 「すべて展開／すべて折りたたむ」ボタンの表示を、現在の開閉状況に合わせる
     function updateToggleAllLabel(groups) {
@@ -1468,27 +1504,85 @@
         rows.push(head);
         if (!open) continue;
 
+        // ===== 部署内を職場ごとにまとめる =====
+        const wgroups = new Map();
         for (const u of g.users) {
-          const tr = document.createElement("tr");
-          tr.innerHTML =
-            "<td><b>" + esc(u.loginId) + "</b></td>" +
-            '<td><button type="button" class="ulink">' + esc(u.name) + "</button></td>" +
-            "<td>" + roleBadgeHtml(u) + "</td>" +
-            "<td>" + esc((u.departmentCode ? u.departmentCode + " " : "") + (u.departmentName || "未設定")) + "</td>" +
-            "<td>" + (u.workplaceId ? esc(u.workplaceName || u.workplaceCode || "") : '<span class="sub">—</span>') + "</td>" +
-            '<td style="white-space:nowrap"></td>';
-          tr.querySelector(".ulink").addEventListener("click", () => openUserDetail(u));
-          const cell = tr.lastElementChild;
-          const be = document.createElement("button");
-          be.className = "mini"; be.type = "button"; be.textContent = "編集";
-          be.addEventListener("click", () => startEditUser(u));
-          const bi = document.createElement("button");
-          bi.className = "mini"; bi.type = "button"; bi.textContent = "詳細";
-          bi.style.marginLeft = "6px";
-          bi.addEventListener("click", () => openUserDetail(u));
-          cell.appendChild(be);
-          cell.appendChild(bi);
-          rows.push(tr);
+          const wkey = u.workplaceId || "__none__";
+          if (!wgroups.has(wkey)) {
+            wgroups.set(wkey, {
+              key: wkey,
+              id: u.workplaceId || null,
+              code: u.workplaceCode || "",
+              name: u.workplaceId ? (u.workplaceName || u.workplaceCode || "") : "職場未設定",
+              users: [],
+            });
+          }
+          wgroups.get(wkey).users.push(u);
+        }
+        // 職場のあるユーザーがいない部署は小見出しを出さない（従来どおりの一覧）
+        const useWpHeads = wgroups.size > 1 || !wgroups.has("__none__");
+        const orderedWps = Array.from(wgroups.values()).sort((a, b) => {
+          if (a.key === "__none__") return 1;
+          if (b.key === "__none__") return -1;
+          return cmpJa(a.code || a.name, b.code || b.name);
+        });
+
+        for (const wg of orderedWps) {
+          const wpKey = g.key + "::" + wg.key;
+          const wpOpen = filtering || !collapsedWps.has(wpKey);
+          if (useWpHeads) {
+            // 職場小見出し: 職場名・人数と、その職場の既定の承認者（＝管理者）を表示
+            const d = wg.id ? workplaceDefaultApprover(wg.id) : null;
+            const apv = wg.id
+              ? (d
+                ? '<span class="apv">承認者: <b>' + esc(d.name) + "</b>" + (d.auto ? "" : "（指定）") + "</span>"
+                : '<span class="apv none">承認者となる管理者がいません</span>')
+              : "";
+            const whead = document.createElement("tr");
+            whead.className = "wphead";
+            const wtd = document.createElement("td");
+            wtd.colSpan = 6;
+            const wbtn = document.createElement("button");
+            wbtn.type = "button";
+            wbtn.innerHTML =
+              chevronHtml() +
+              "<span>" + esc((wg.code ? wg.code + " " : "") + wg.name) + "</span>" +
+              '<span class="cnt">' + wg.users.length + " 名</span>" + apv;
+            wbtn.setAttribute("aria-expanded", wpOpen ? "true" : "false");
+            wbtn.disabled = filtering;
+            wbtn.addEventListener("click", () => {
+              if (collapsedWps.has(wpKey)) collapsedWps.delete(wpKey);
+              else collapsedWps.add(wpKey);
+              renderUserTable();
+            });
+            wtd.appendChild(wbtn);
+            whead.appendChild(wtd);
+            rows.push(whead);
+            if (!wpOpen) continue;
+          }
+
+          for (const u of wg.users) {
+            const tr = document.createElement("tr");
+            tr.innerHTML =
+              "<td><b>" + esc(u.loginId) + "</b></td>" +
+              '<td><button type="button" class="ulink">' + esc(u.name) + "</button></td>" +
+              "<td>" + roleBadgeHtml(u) + "</td>" +
+              "<td>" + esc((u.departmentCode ? u.departmentCode + " " : "") + (u.departmentName || "未設定")) + "</td>" +
+              "<td>" + (u.workplaceId ? esc(u.workplaceName || u.workplaceCode || "") : '<span class="sub">—</span>') + "</td>" +
+              '<td style="white-space:nowrap"></td>';
+            tr.querySelector(".ulink").addEventListener("click", () => openUserDetail(u));
+            const cell = tr.lastElementChild;
+            const be = document.createElement("button");
+            be.className = "mini"; be.type = "button"; be.textContent = "編集";
+            be.addEventListener("click", () => startEditUser(u));
+            const bi = document.createElement("button");
+            bi.className = "mini"; bi.type = "button"; bi.textContent = "詳細";
+            bi.style.marginLeft = "6px";
+            bi.addEventListener("click", () => openUserDetail(u));
+            cell.appendChild(be);
+            cell.appendChild(bi);
+            rows.push(tr);
+          }
         }
       }
       tbody.replaceChildren(...rows);
