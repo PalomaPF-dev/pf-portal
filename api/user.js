@@ -36,6 +36,7 @@ const SSO_APP_KEYS = [
   "tenchu",
   "purchasing",
   "jinji",
+  "operation",
 ];
 
 const TOKEN_TTL_MS = 60 * 1000;
