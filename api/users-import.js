@@ -18,7 +18,7 @@
 //  - 新規は INSERT → プロビジョニング（アプリごとにまとめて1リクエスト）
 // レスポンス: { rows: [{loginId,name,status,message?,apps:[{app,status,inviteUrl}]}] }
 const { requireSql, ensureSchema, readBody } = require("../lib/db");
-const { requireManage } = require("../lib/portalAuth");
+const { requireManageSession } = require("../lib/portalAuth");
 const { provisionUsers } = require("../lib/provision");
 
 const MAX_ROWS = 200;
@@ -53,9 +53,9 @@ module.exports = async (req, res) => {
     res.status(405).json({ message: "Method not allowed" });
     return;
   }
-  if (!requireManage(req, res)) return;
   const sql = requireSql(res);
   if (!sql) return;
+  if (!(await requireManageSession(req, res, sql))) return;
 
   try {
     await ensureSchema(sql);

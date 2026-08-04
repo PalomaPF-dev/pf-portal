@@ -273,13 +273,14 @@
     <!-- ログイン -->
     <section id="loginView" class="hidden">
       <div class="lead">
-        <h1>管理者ログイン</h1>
-        <p>ポータルの職場設定・ユーザー管理を行います。マスターパスワード、またはポータル管理権限が付与されたユーザーの社員番号と管理用パスワードでログインしてください。</p>
+        <h1>ポータル管理ログイン</h1>
+        <p>ポータルの部署・職場設定とユーザー管理を行います。マスターパスワード、または<strong>ポータル管理権限</strong>が付与されたユーザーの社員番号と管理用パスワードでログインしてください。</p>
+        <p class="sub" style="font-size:12px">※ アプリの承認フロー上の「管理者」権限では、この画面にはログインできません。</p>
       </div>
       <div class="card" style="max-width:420px">
         <label class="f">社員番号（ポータル管理権限のユーザーのみ）</label>
-        <input type="text" id="loginId" autocomplete="username" placeholder="管理者（マスター）の方は空欄のまま" />
-        <div class="help">管理者はこの欄は空欄のまま、マスターパスワードのみ入力してください</div>
+        <input type="text" id="loginId" autocomplete="username" placeholder="マスターパスワードの方は空欄のまま" />
+        <div class="help">マスターパスワードでログインする場合は、この欄は空欄のままにしてください</div>
         <label class="f">パスワード</label>
         <input type="password" id="loginPw" autocomplete="current-password" />
         <button class="primary" id="loginBtn" type="button">ログイン</button>
@@ -474,11 +475,12 @@
           </div>
           <div class="row2">
             <div>
-              <label class="f">権限</label>
+              <label class="f">権限（承認フロー上の役割）</label>
               <select id="ufRole">
                 <option value="member">一般</option>
                 <option value="admin">管理者</option>
               </select>
+              <div class="help">管理者＝各アプリで承認・登録ができる役割。この管理画面には入れません</div>
             </div>
             <div id="ufApproverWrap">
               <label class="f">承認者（任意）</label>
@@ -522,7 +524,7 @@
               <div>
                 <label class="f" style="display:flex;align-items:center;gap:7px;cursor:pointer">
                   <input type="checkbox" id="ufCanManage" style="width:auto;accent-color:var(--red)" />
-                  ポータル管理権限（部署・ユーザー設定が可能）
+                  ポータル管理権限（この管理画面にログインできる）
                 </label>
               </div>
               <div>
@@ -564,6 +566,7 @@
         <div class="note">
           発行状況: <span class="badge b-created">連携済み</span>=アプリにアカウント連携済み（ポータルから自動ログイン可） / <span class="badge b-error">エラー</span>=連携失敗（「状況更新」で再連携。解消しない場合はアプリの更新状況を確認）。アプリ個別のパスワード設定は不要です（ポータルで一括ログイン）。<br />
           承認者を指定しない一般ユーザーは、所属する職場の管理者（職場に管理者を指定していない場合は、<strong>その職場に所属する管理者権限のユーザー</strong>）が承認者になります。管理者にも承認者を指定できます（管理者本人の申請を上位者へ回す場合）。承認者の変更は各アプリへ自動で連携されます。<br />
+          権限の<span class="badge b-admin">管理者</span>は<strong>各アプリの承認フロー上の役割</strong>で、このポータル管理画面にはログインできません。管理画面に入れるのは<span class="badge b-manage">ポータル管理</span>（ポータル管理権限）を付与されたユーザーとマスターパスワードのみです。<br />
           <strong>名簿から削除しても、各アプリ側のアカウントは削除されません。</strong>アプリ側のアカウント削除は各アプリの管理機能で行ってください。
         </div>
 

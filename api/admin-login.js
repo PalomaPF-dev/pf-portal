@@ -3,6 +3,8 @@
 //  - loginId 空欄: マスターパスワード（PF_ADMIN_BOOTSTRAP_HASH と bcrypt 照合）→ セッション kind='master'
 //  - loginId 指定: pf_portal_users の can_manage=true かつ manage_password_hash 設定済みユーザーと
 //    scrypt 照合 → セッション kind=login_id（ポータル管理権限ユーザー）
+// ※ 承認フロー上の管理者権限（role='admin'）は管理画面のログイン条件ではない。
+//    管理画面に入れるのは「ポータル管理権限（can_manage）」を付与されたユーザーだけ。
 // 成功で HttpOnly cookie pf_admin（"exp.kind.hmac"・12時間）を発行し {ok,kind:'master'|'manager'} を返す。
 // DELETE → ログアウト（cookie 破棄）。
 // レート制限: 同一IP 10分10回。
@@ -103,9 +105,12 @@ module.exports = async (req, res) => {
         SELECT id, login_id, name, can_manage, manage_password_hash
         FROM pf_portal_users WHERE login_id = ${loginId} LIMIT 1`;
       const u = rows[0];
+      // 承認フロー上の管理者権限（role='admin'）では入れない。can_manage だけが条件。
       if (!u || u.can_manage !== true || !u.manage_password_hash ||
           !verifyManagePassword(password, u.manage_password_hash)) {
-        res.status(401).json({ message: "社員番号またはパスワードが違います（ポータル管理権限が必要です）" });
+        res.status(401).json({
+          message: "社員番号またはパスワードが違います（この画面はポータル管理権限を付与されたユーザーのみ利用できます）",
+        });
         return;
       }
       setSessionCookie(res, createSessionValue(secret, u.login_id));
