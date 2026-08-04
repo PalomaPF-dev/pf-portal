@@ -1,9 +1,14 @@
 // CSV 一括登録 API（管理者専用）。
-// POST {rows:[{loginId,name,departmentCode?,departmentName?,workplaceCode?,role?,email?}]}（1リクエスト最大200行）
+// POST {rows:[{loginId,name,departmentCode?,departmentName?,workplaceCode?,workplaceName?,role?,email?,
+//              positionName?,dutyName?,birthDate?,hireDate?,employmentType?}]}（1リクエスト最大200行）
 //  - 部署の解決は「部署コード優先」→ コード空欄なら部署名で照合。どちらも不一致なら error
-//  - 職場は職場コードで照合（任意）。指定の部署配下でなければ error
+//  - 職場は職場コードで照合（任意）。未登録のコードでも職場名があれば部署配下に自動作成する
+//    （名簿CSVからの一括展開用）。登録済みコードが別部署配下なら error
 //  - 権限は 管理者/admin・一般/member。空欄なら一般(member)。旧「作業者/worker」は一般として取り込む
-//  - login_id 重複（DB既存 or 同一バッチ内）はスキップ status:'duplicate'
+//  - login_id が DB 既存の場合は、人事プロフィール項目（役職・職務・生年月日・入社年月日・雇用体系）
+//    だけを更新して status:'updated'（部署・職場・権限・アカウントは変更しない）。
+//    同一バッチ内の重複は status:'duplicate'
+//  - 生年月日・入社年月日・雇用体系は個人情報。管理者専用APIの外には出さないこと（年齢は保存しない）
 //  - 新規は INSERT → プロビジョニング（アプリごとにまとめて1リクエスト）
 // レスポンス: { rows: [{loginId,name,status,message?,apps:[{app,status,inviteUrl}]}] }
 const { requireSql, ensureSchema, readBody } = require("../lib/db");
@@ -22,6 +27,16 @@ const ROLE_ALIASES = new Map([
   ["member", "member"], ["一般", "member"], ["一般ユーザー", "member"], ["利用者", "member"],
   ["worker", "member"], ["作業者", "member"],
 ]);
+// 日付の正規化: YYYY-MM-DD / YYYY/M/D を受け付けて ISO (YYYY-MM-DD) へ。空は null。不正は undefined。
+function normalizeDate(raw) {
+  const v = String(raw || "").trim();
+  if (!v) return null;
+  const m = v.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
+  if (!m) return undefined;
+  const iso = `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+  return Number.isNaN(Date.parse(iso)) ? undefined : iso;
+}
+
 function normalizeRole(raw) {
   return ROLE_ALIASES.get(String(raw || "").trim().toLowerCase()) ||
     ROLE_ALIASES.get(String(raw || "").trim()) || null;
@@ -68,12 +83,24 @@ module.exports = async (req, res) => {
       const departmentCode = String((r && r.departmentCode) || "").trim();
       const departmentName = String((r && r.departmentName) || "").trim();
       const workplaceCode = String((r && r.workplaceCode) || "").trim();
+      const workplaceName = String((r && r.workplaceName) || "").trim();
       const roleRaw = String((r && r.role) || "").trim();
       const email = String((r && r.email) || "").trim();
+      const positionName = String((r && r.positionName) || "").trim().slice(0, 100) || null;
+      const dutyName = String((r && r.dutyName) || "").trim().slice(0, 100) || null;
+      const employmentType = String((r && r.employmentType) || "").trim().slice(0, 100) || null;
+      const birthDate = normalizeDate(r && r.birthDate);
+      const hireDate = normalizeDate(r && r.hireDate);
       const item = {
-        loginId, name, departmentCode, departmentName, workplaceCode, email,
+        loginId, name, departmentCode, departmentName, workplaceCode, workplaceName, email,
+        positionName, dutyName, employmentType, birthDate, hireDate,
         role: "member", status: null, message: null, dept: null, workplace: null,
       };
+      if (birthDate === undefined || hireDate === undefined) {
+        item.status = "error";
+        item.message = "生年月日・入社年月日は YYYY-MM-DD（または YYYY/M/D）形式で入力してください";
+        return item;
+      }
       if (!loginId || !LOGIN_ID_RE.test(loginId) || loginId.length > 64) {
         item.status = "error";
         item.message = "社員番号（ID）が不正です（半角英数字と - _ @ . ）";
@@ -108,19 +135,62 @@ module.exports = async (req, res) => {
       if (workplaceCode) {
         const wp = wpByCode.get(workplaceCode);
         if (!wp) {
-          item.status = "error";
-          item.message = "職場が見つかりません";
-          return item;
+          // 未登録の職場コード: 職場名があれば部署配下に自動作成（後段でまとめて INSERT）
+          if (!workplaceName) {
+            item.status = "error";
+            item.message = "職場が見つかりません（職場名の列があれば自動作成します）";
+            return item;
+          }
+          item.createWorkplace = true;
+        } else {
+          if (wp.department_id !== dept.id) {
+            item.status = "error";
+            item.message = `職場「${wp.name}」は部署「${dept.name}」の配下ではありません`;
+            return item;
+          }
+          item.workplace = wp;
         }
-        if (wp.department_id !== dept.id) {
-          item.status = "error";
-          item.message = `職場「${wp.name}」は部署「${dept.name}」の配下ではありません`;
-          return item;
-        }
-        item.workplace = wp;
       }
       return item;
     });
+
+    // 未登録の職場をまとめて自動作成（コードはグローバル一意。バッチ内の同一コードは1件に集約）
+    const wpToCreate = new Map();
+    for (const it of items) {
+      if (it.status || !it.createWorkplace) continue;
+      const cur = wpToCreate.get(it.workplaceCode);
+      if (cur && cur.departmentId !== it.dept.id) {
+        it.status = "error";
+        it.message = `職場コード「${it.workplaceCode}」がバッチ内で複数の部署に割り当てられています`;
+        continue;
+      }
+      if (!cur) wpToCreate.set(it.workplaceCode, { code: it.workplaceCode, name: it.workplaceName, departmentId: it.dept.id });
+    }
+    if (wpToCreate.size > 0) {
+      const defs = Array.from(wpToCreate.values());
+      const createdWps = await sql`
+        INSERT INTO pf_portal_workplaces (code, name, department_id)
+        SELECT * FROM unnest(
+          ${defs.map((w) => w.code)}::text[],
+          ${defs.map((w) => w.name)}::text[],
+          ${defs.map((w) => w.departmentId)}::uuid[]
+        )
+        ON CONFLICT (code) DO NOTHING
+        RETURNING id, code, name, department_id`;
+      for (const w of createdWps) {
+        wpByCode.set(String(w.code), { ...w, admin_user_id: null, admin_login_id: null });
+      }
+      for (const it of items) {
+        if (it.status || !it.createWorkplace) continue;
+        const wp = wpByCode.get(it.workplaceCode);
+        if (!wp || wp.department_id !== it.dept.id) {
+          it.status = "error";
+          it.message = "職場の自動作成に失敗しました（同じ職場コードが別部署で登録済みの可能性）";
+          continue;
+        }
+        it.workplace = wp;
+      }
+    }
 
     // DB 既存の login_id
     const candidateIds = items.filter((it) => !it.status).map((it) => it.loginId);
@@ -130,18 +200,37 @@ module.exports = async (req, res) => {
       existing = new Set(found.map((r) => r.login_id));
     }
 
-    // 重複判定（DB既存 + バッチ内重複）
+    // 振り分け: DB既存 → 人事プロフィール項目のみ更新 / バッチ内重複 → スキップ
     const seenInBatch = new Set();
     const toInsert = [];
+    const toUpdate = [];
     for (const it of items) {
       if (it.status) continue;
-      if (existing.has(it.loginId) || seenInBatch.has(it.loginId)) {
+      if (seenInBatch.has(it.loginId)) {
         it.status = "duplicate";
-        it.message = "この社員番号（ID）は登録済みのためスキップしました";
+        it.message = "この社員番号（ID）はこのCSV内で重複しているためスキップしました";
         continue;
       }
       seenInBatch.add(it.loginId);
+      if (existing.has(it.loginId)) {
+        toUpdate.push(it);
+        continue;
+      }
       toInsert.push(it);
+    }
+
+    // 既存ユーザー: 人事プロフィール項目だけを更新（空欄は既存値を保持。部署・権限・アカウントは変更しない）
+    for (const it of toUpdate) {
+      await sql`
+        UPDATE pf_portal_users
+        SET position_name   = COALESCE(${it.positionName}, position_name),
+            duty_name       = COALESCE(${it.dutyName}, duty_name),
+            birth_date      = COALESCE(${it.birthDate}, birth_date),
+            hire_date       = COALESCE(${it.hireDate}, hire_date),
+            employment_type = COALESCE(${it.employmentType}, employment_type)
+        WHERE login_id = ${it.loginId}`;
+      it.status = "updated";
+      it.message = "登録済みのため人事項目のみ更新しました（部署・権限・アカウントは変更していません）";
     }
 
     // 新規をまとめて INSERT
@@ -153,15 +242,27 @@ module.exports = async (req, res) => {
       const deptIds = toInsert.map((it) => it.dept.id);
       const roles = toInsert.map((it) => it.role);
       const workplaceIds = toInsert.map((it) => (it.workplace ? it.workplace.id : null));
+      const positions = toInsert.map((it) => it.positionName);
+      const duties = toInsert.map((it) => it.dutyName);
+      const births = toInsert.map((it) => it.birthDate);
+      const hires = toInsert.map((it) => it.hireDate);
+      const employments = toInsert.map((it) => it.employmentType);
       const inserted = await sql`
-        INSERT INTO pf_portal_users (login_id, name, email, department_id, role, workplace_id)
+        INSERT INTO pf_portal_users
+          (login_id, name, email, department_id, role, workplace_id,
+           position_name, duty_name, birth_date, hire_date, employment_type)
         SELECT * FROM unnest(
           ${loginIds}::text[],
           ${names}::text[],
           ${emails}::text[],
           ${deptIds}::uuid[],
           ${roles}::text[],
-          ${workplaceIds}::uuid[]
+          ${workplaceIds}::uuid[],
+          ${positions}::text[],
+          ${duties}::text[],
+          ${births}::date[],
+          ${hires}::date[],
+          ${employments}::text[]
         )
         ON CONFLICT (login_id) DO NOTHING
         RETURNING id, login_id, name, email`;
