@@ -481,7 +481,7 @@
               </select>
             </div>
             <div id="ufApproverWrap">
-              <label class="f">承認者（任意・一般のみ）</label>
+              <label class="f">承認者（任意）</label>
               <select id="ufApprover"></select>
             </div>
           </div>
@@ -563,7 +563,7 @@
         <div class="msg err hidden" id="usersMsg"></div>
         <div class="note">
           発行状況: <span class="badge b-created">連携済み</span>=アプリにアカウント連携済み（ポータルから自動ログイン可） / <span class="badge b-error">エラー</span>=連携失敗（「状況更新」で再連携。解消しない場合はアプリの更新状況を確認）。アプリ個別のパスワード設定は不要です（ポータルで一括ログイン）。<br />
-          承認者を指定しない一般ユーザーは、所属する職場の管理者（職場に管理者を指定していない場合は、<strong>その職場に所属する管理者権限のユーザー</strong>）が承認者になります。承認者の変更は各アプリへ自動で連携されます。<br />
+          承認者を指定しない一般ユーザーは、所属する職場の管理者（職場に管理者を指定していない場合は、<strong>その職場に所属する管理者権限のユーザー</strong>）が承認者になります。管理者にも承認者を指定できます（管理者本人の申請を上位者へ回す場合）。承認者の変更は各アプリへ自動で連携されます。<br />
           <strong>名簿から削除しても、各アプリ側のアカウントは削除されません。</strong>アプリ側のアカウント削除は各アプリの管理機能で行ってください。
         </div>
 
@@ -574,10 +574,10 @@
         <div class="card">
           <h2>CSVファイルから一括登録</h2>
           <p style="font-size:12px;color:var(--sub);line-height:1.9">
-            1行目はヘッダー <b>社員番号,ユーザー名,部署コード,部署名,職場コード,職場名,権限,メール,役職名称,職務名称,生年月日,入社年月日,雇用体系名称</b>（社員番号・ユーザー名以外は任意）。文字コードは UTF-8 / Shift_JIS のどちらでも読み込めます。<br />
-            未登録の職場コードは、職場名があれば部署配下に自動作成します。<b>登録済みの社員番号は人事項目（役職・職務・生年月日・入社年月日・雇用体系）のみ更新</b>し、部署・権限・アカウントは変更しません（承認者を最新にするため、アプリへの連携はやり直します）。<br />
+            1行目はヘッダー <b>社員番号,ユーザー名,部署コード,部署名,職場コード,職場名,権限,承認者社員番号,メール,役職名称,職務名称,生年月日,入社年月日,雇用体系名称</b>（社員番号・ユーザー名以外は任意）。文字コードは UTF-8 / Shift_JIS のどちらでも読み込めます。<br />
+            未登録の職場コードは、職場名があれば部署配下に自動作成します。<b>登録済みの社員番号は人事項目（役職・職務・生年月日・入社年月日・雇用体系）と承認者のみ更新</b>し、部署・権限・アカウントは変更しません（アプリへの連携はやり直します）。<br />
             生年月日・年齢（自動計算）・入社年月日・雇用体系名称は<b>ポータル管理者のみ閲覧</b>できる項目です（アプリには連携されません）。<br />
-            部署は<b>部署コード優先</b>で照合し、コードが空欄の行は部署名で照合します。<b>職場コード</b>を入れるとその職場に配属します（指定した部署の配下である必要があります）。<b>権限</b>は 管理者 / 一般 のいずれか（空欄なら一般。旧CSVの「作業者」は一般として取り込みます）。一般ユーザーの承認者は<b>同じ職場の管理者</b>が自動で設定されます。
+            部署は<b>部署コード優先</b>で照合し、コードが空欄の行は部署名で照合します。<b>職場コード</b>を入れるとその職場に配属します（指定した部署の配下である必要があります）。<b>権限</b>は 管理者 / 一般 のいずれか（空欄なら一般。旧CSVの「作業者」は一般として取り込みます）。<b>承認者社員番号</b>にその人の申請を承認する管理者の社員番号を入れると、承認者として設定されます（管理者にも指定できます。同じCSV内で登録する管理者も指定可）。空欄の一般ユーザーは<b>同じ職場の管理者</b>が自動で承認者になります。
             <a href="#" class="plain" id="csvTemplate">テンプレートCSVをダウンロード</a>
           </p>
           <label class="f">CSVファイル</label>
@@ -590,7 +590,7 @@
           <div class="tblwrap">
             <table class="tbl">
               <thead>
-                <tr><th>#</th><th>社員番号</th><th>ユーザー名</th><th>部署コード</th><th>部署名</th><th>職場コード</th><th>権限</th><th>メール</th><th>チェック</th></tr>
+                <tr><th>#</th><th>社員番号</th><th>ユーザー名</th><th>部署コード</th><th>部署名</th><th>職場コード</th><th>権限</th><th>承認者</th><th>メール</th><th>チェック</th></tr>
               </thead>
               <tbody id="csvPreviewRows"></tbody>
             </table>
@@ -1248,13 +1248,15 @@
       sel.value = keep && [...sel.options].some((o) => o.value === keep) ? keep : "";
     }
 
-    // 承認者の選択肢（管理者権限のユーザーのみ・編集中の本人は除外）
+    // 承認者の選択肢（管理者権限のユーザーのみ・編集中の本人は除外）。
+    // 管理者にも承認者を指定できる（管理者本人の申請を上位者へ回すため）。
     function renderApproverSelect(selectedId) {
       const sel = $("ufApprover");
       const keep = selectedId !== undefined ? selectedId : sel.value;
       const o0 = document.createElement("option");
       o0.value = "";
-      o0.textContent = "職場の管理者に従う（既定）";
+      // 未指定のときの既定は、一般＝職場の管理者、管理者＝承認者なし
+      o0.textContent = $("ufRole").value === "admin" ? "指定なし（既定）" : "職場の管理者に従う（既定）";
       const opts = [o0];
       for (const u of adminUsers()) {
         if (editingUserId && u.id === editingUserId) continue; // 自分自身は承認者にできない
@@ -1268,9 +1270,7 @@
     }
 
     $("ufDept").addEventListener("change", () => renderUserWorkplaceSelect(""));
-    $("ufRole").addEventListener("change", () => {
-      $("ufApproverWrap").classList.toggle("hidden", $("ufRole").value === "admin");
-    });
+    $("ufRole").addEventListener("change", () => renderApproverSelect());
 
     async function loadUsers() {
       const rows = await api("/api/users");
@@ -1336,9 +1336,10 @@
     }
 
     // 承認者セル: 本人指定 → 職場の管理者（指定） → 職場所属の管理者（自動） → 未設定
+    // 管理者は名簿での明示指定のみ（職場からの自動割り当てはしない）
     function approverCellHtml(u) {
-      if (u.role === "admin") return '<span class="sub">—</span>';
       if (u.approverName) return esc(u.approverName);
+      if (u.role === "admin") return '<span class="sub">—</span>';
       const d = workplaceDefaultApprover(u.workplaceId);
       if (d) return esc(d.name) + ' <span class="sub">' + (d.auto ? "（職場の管理者・自動）" : "（職場管理者）") + "</span>";
       return '<span class="sub">未設定</span>';
@@ -1698,7 +1699,6 @@
       if (u.departmentId) $("ufDept").value = u.departmentId;
       renderUserWorkplaceSelect(u.workplaceId || "");
       $("ufRole").value = u.role === "admin" ? "admin" : "member";
-      $("ufApproverWrap").classList.toggle("hidden", u.role === "admin");
       renderApproverSelect(u.approverUserId || "");
       // ポータル管理権限の付与 UI はマスターセッションのみ表示（サーバー側でも強制）
       $("ufManageWrap").classList.toggle("hidden", sessionKind !== "master");
@@ -1726,7 +1726,6 @@
       updateUfAge();
       renderUserWorkplaceSelect("");
       $("ufRole").value = "member";
-      $("ufApproverWrap").classList.remove("hidden");
       renderApproverSelect("");
       $("ufManageWrap").classList.add("hidden");
       $("ufCanManage").checked = false;
@@ -1752,7 +1751,7 @@
         departmentId: $("ufDept").value,
         workplaceId: $("ufWorkplace").value || null,
         role,
-        approverUserId: role !== "admin" ? ($("ufApprover").value || null) : null,
+        approverUserId: $("ufApprover").value || null,
         positionName: $("ufPosition").value.trim(),
         dutyName: $("ufDuty").value.trim(),
         employmentType: $("ufEmployment").value.trim(),
@@ -2123,9 +2122,10 @@
     });
 
     // ===== ③ CSV一括登録 =====
-    const CSV_HEADER = ["社員番号", "ユーザー名", "部署コード", "部署名", "職場コード", "職場名", "権限", "メール", "役職名称", "職務名称", "生年月日", "入社年月日", "雇用体系名称"];
-    let csvRows = []; // [{loginId,name,departmentCode,departmentName,workplaceCode,role,email}]
+    const CSV_HEADER = ["社員番号", "ユーザー名", "部署コード", "部署名", "職場コード", "職場名", "権限", "承認者社員番号", "メール", "役職名称", "職務名称", "生年月日", "入社年月日", "雇用体系名称"];
+    let csvRows = []; // [{loginId,name,departmentCode,departmentName,workplaceCode,role,approverLoginId,email}]
     let csvResults = []; // 結果（rows + apps）
+    let fileNames = new Map(); // 読み込んだCSV内の 社員番号→氏名（承認者名の表示に使う）
 
     // CSV の権限表記 → API に渡す role。空欄は一般(member)。未知の値は null（プレビューでエラー表示）
     const CSV_ROLES = {
@@ -2144,9 +2144,9 @@
       e.preventDefault();
       downloadCsv("portal-users-template.csv", [
         CSV_HEADER,
-        ["1001", "山田 太郎", "D001", "生産管理部", "W001", "管理課", "管理者", "taro@example.com", "課長", "生産管理", "1980-04-01", "2005-04-01", "正社員"],
-        ["1002", "鈴木 花子", "D003", "", "", "", "一般", "", "", "", "", "", ""],
-        ["1003", "佐藤 次郎", "D003", "", "W010", "第1ライン", "一般", "", "係長", "", "1975-10-15", "1998-04-01", "正社員"],
+        ["1001", "山田 太郎", "D001", "生産管理部", "W001", "管理課", "管理者", "", "taro@example.com", "課長", "生産管理", "1980-04-01", "2005-04-01", "正社員"],
+        ["1002", "鈴木 花子", "D003", "", "", "", "一般", "1001", "", "", "", "", "", ""],
+        ["1003", "佐藤 次郎", "D003", "", "W010", "第1ライン", "一般", "", "", "係長", "", "1975-10-15", "1998-04-01", "正社員"],
       ]);
     });
 
@@ -2229,12 +2229,15 @@
         const iBirth = find("生年月日");
         const iHire = head.findIndex((h) => h === "入社年月日" || h === "入社日" || h.includes("入社"));
         const iEmp = head.findIndex((h) => h === "雇用体系名称" || h === "雇用体系" || h.includes("雇用"));
+        // 承認者（＝その人の申請を承認する管理者）の社員番号。名簿の「管理者」列も受け付ける。
+        // 「承認者名／管理者名」を拾わないよう完全一致のみで探す
+        const iApv = head.findIndex((h) => h === "承認者社員番号" || h === "管理者社員番号" || h === "承認者" || h === "管理者");
         // 見出し行がある場合は見つかった列だけを使う（-1 = その列は空扱い）。
         // 列が無いときに既定の並びへ戻すと、列順を入れ替えたCSVで別の列を拾ってしまうため。
         idx = { loginId: iLogin, name: iName, code: iCode, deptName: iDept, wpCode: iWp, role: iRole, email: iMail,
-                wpName: iWpName, pos: iPos, duty: iDuty, birth: iBirth, hire: iHire, emp: iEmp };
+                wpName: iWpName, pos: iPos, duty: iDuty, birth: iBirth, hire: iHire, emp: iEmp, apv: iApv };
       } else {
-        idx = { ...idx, wpName: -1, pos: -1, duty: -1, birth: -1, hire: -1, emp: -1 };
+        idx = { ...idx, wpName: -1, pos: -1, duty: -1, birth: -1, hire: -1, emp: -1, apv: -1 };
       }
       const cell = (r, i) => (i >= 0 ? String(r[i] || "").trim() : "");
       const out = [];
@@ -2248,6 +2251,8 @@
           workplaceCode: cell(r, idx.wpCode),
           workplaceName: cell(r, idx.wpName),
           role: cell(r, idx.role),
+          // Excel の VLOOKUP 由来の #N/A は「指定なし」として扱う
+          approverLoginId: cell(r, idx.apv) === "#N/A" ? "" : cell(r, idx.apv),
           email: cell(r, idx.email),
           positionName: cell(r, idx.pos),
           dutyName: cell(r, idx.duty),
@@ -2257,6 +2262,24 @@
         });
       }
       return out;
+    }
+
+    /**
+     * 承認者社員番号の事前チェック。承認者は同じCSVの中にいてもよい（サーバー側は登録後に解決する）ため、
+     * ファイル内の権限（fileRoles）と登録済みユーザーの両方を見る。
+     * 戻り値: { ok, note }（note は空文字ならプレビューに何も出さない）
+     */
+    function checkApprover(r, fileRoles) {
+      const a = r.approverLoginId;
+      if (!a) return { ok: true, note: "" };
+      if (a === r.loginId) return { ok: true, note: "自分自身のため未設定" };
+      const inFile = fileRoles.get(a);
+      const inDb = users.find((u) => u.loginId === a);
+      if (!inFile && !inDb) return { ok: false, note: "承認者 " + a + " が名簿にありません" };
+      const role = inFile || (inDb ? inDb.role : null);
+      if (role !== "admin") return { ok: false, note: "承認者 " + a + " は一般権限のため指定できません" };
+      const name = inDb ? inDb.name : (fileNames.get(a) || "");
+      return { ok: true, note: name || a };
     }
 
     // 行のクライアント側チェック（サーバー側でも検証される）
@@ -2300,9 +2323,13 @@
           return;
         }
         $("csvCount").textContent = String(csvRows.length);
+        // 承認者はファイル内の行も指定できるため、権限・氏名の索引を先に作る
+        fileNames = new Map(csvRows.map((r) => [r.loginId, r.name]));
+        const fileRoles = new Map(csvRows.map((r) => [r.loginId, csvRole(r.role)]));
         const seen = new Set();
         $("csvPreviewRows").replaceChildren(...csvRows.map((r, i) => {
           const chk = precheckRow(r, seen);
+          const apv = checkApprover(r, fileRoles);
           const tr = document.createElement("tr");
           tr.innerHTML =
             "<td class=\"sub\">" + (i + 1) + "</td>" +
@@ -2312,6 +2339,7 @@
             "<td>" + esc(r.departmentName) + "</td>" +
             "<td>" + esc(r.workplaceCode) + "</td>" +
             "<td>" + esc(ROLE_LABELS[csvRole(r.role)] || r.role || "一般") + "</td>" +
+            "<td" + (apv.ok ? ' class="sub"' : ' style="color:var(--red)"') + ">" + esc(apv.note || "—") + "</td>" +
             "<td class=\"sub\">" + esc(r.email) + "</td>" +
             "<td>" + (chk.ok ? '<span class="badge b-created">' + esc(chk.note) + "</span>" : '<span class="badge b-error">' + esc(chk.note) + "</span>") + "</td>";
           return tr;
@@ -2338,7 +2366,10 @@
           const r = await api("/api/users-import", { method: "POST", body: JSON.stringify({ rows: part }) });
           csvResults.push(...(r.rows || []));
         }
-        prog.textContent = "完了: " + csvResults.length + " 行を処理しました";
+        // 承認者の再設定（2巡目）。分割送信の後ろのチャンクにいる承認者は1巡目では解決できないため、
+        // 全行の登録が終わってからもう一度通す。変化がない人は再連携されないので何度実行しても安全。
+        const apvNote = await runApproverPass(prog);
+        prog.textContent = "完了: " + csvResults.length + " 行を処理しました" + apvNote;
         prog.className = "msg ok";
         renderCsvResults();
         await reloadAll();
@@ -2350,6 +2381,36 @@
         $("csvRun").disabled = false;
       }
     });
+
+    /**
+     * 承認者の一括設定（取り込みの2巡目）。承認者社員番号がある行だけを送る。
+     * 戻り値: 進捗メッセージに足す文字列（対象が無ければ空文字）
+     */
+    async function runApproverPass(prog) {
+      // エラー行・重複スキップ行は対象外
+      const okIds = new Set(csvResults.filter((r) => r.status === "created" || r.status === "updated").map((r) => r.loginId));
+      const targets = csvRows.filter((r) => r.approverLoginId && r.approverLoginId !== r.loginId && okIds.has(r.loginId));
+      if (targets.length === 0) return "";
+      const CHUNK = 500;
+      const all = [];
+      for (let i = 0; i < targets.length; i += CHUNK) {
+        prog.textContent = "承認者を設定中… " + Math.min(i + CHUNK, targets.length) + " / " + targets.length + " 名";
+        const part = targets.slice(i, i + CHUNK).map((r) => ({ loginId: r.loginId, approverLoginId: r.approverLoginId }));
+        const res = await api("/api/users-approvers", { method: "POST", body: JSON.stringify({ rows: part }) });
+        all.push(...(res.rows || []));
+      }
+      const errs = all.filter((x) => x.status === "error");
+      // 承認者の設定に失敗した行は、取り込み結果の表にも理由を出す
+      if (errs.length > 0) {
+        const byLogin = new Map(errs.map((x) => [x.loginId, x.message || "承認者を設定できませんでした"]));
+        for (const r of csvResults) {
+          const m = byLogin.get(r.loginId);
+          if (m) r.message = [r.message, m].filter(Boolean).join(" / ");
+        }
+      }
+      const n = all.filter((x) => x.status === "updated").length;
+      return "（承認者 " + n + " 名を設定" + (errs.length > 0 ? " / 承認者エラー " + errs.length + " 件" : "") + "）";
+    }
 
     function renderCsvResults() {
       $("csvResultRows").replaceChildren(...csvResults.map((r) => {
