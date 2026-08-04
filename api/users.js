@@ -10,11 +10,13 @@ const { provisionUsers } = require("../lib/provision");
 
 const LOGIN_ID_RE = /^[A-Za-z0-9_@.-]+$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// 役割は 管理者(admin) / 一般(member) の2種。旧「作業者(worker)」は一般に統一した
+// （呼称も一般。旧データ・旧クライアントからの worker は member として扱う）。
 const ROLES = ["admin", "member", "worker"];
 
 // DB上のroleを表示用に正規化（未知の値は member 扱い）
 function normalizeRole(role) {
-  return role === "admin" ? "admin" : role === "worker" ? "worker" : "member";
+  return role === "admin" ? "admin" : "member";
 }
 
 // 承認者の解決: 本人の承認者指定 → その login_id、なければ職場の管理者 → その login_id、どちらも無ければ null。
@@ -39,7 +41,7 @@ async function resolveApproverLoginId(sql, approverUserId, workplaceId) {
 // OK なら正規化済みの { role, workplaceId, approverUserId } を返し、NG なら res に 400 を書いて null を返す。
 async function validateRoleWorkplaceApprover(sql, res, { role, workplaceId, approverUserId, departmentId, selfId }) {
   if (!ROLES.includes(role)) {
-    res.status(400).json({ message: "権限は 管理者(admin) / 一般(member) / 作業者(worker) のいずれかを指定してください" });
+    res.status(400).json({ message: "権限は 管理者(admin) / 一般(member) のいずれかを指定してください" });
     return null;
   }
   if (workplaceId) {

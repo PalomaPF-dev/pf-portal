@@ -2,7 +2,7 @@
 // POST {rows:[{loginId,name,departmentCode?,departmentName?,workplaceCode?,role?,email?}]}（1リクエスト最大200行）
 //  - 部署の解決は「部署コード優先」→ コード空欄なら部署名で照合。どちらも不一致なら error
 //  - 職場は職場コードで照合（任意）。指定の部署配下でなければ error
-//  - 権限は 管理者/admin・一般/member・作業者/worker。空欄なら一般(member)
+//  - 権限は 管理者/admin・一般/member。空欄なら一般(member)。旧「作業者/worker」は一般として取り込む
 //  - login_id 重複（DB既存 or 同一バッチ内）はスキップ status:'duplicate'
 //  - 新規は INSERT → プロビジョニング（アプリごとにまとめて1リクエスト）
 // レスポンス: { rows: [{loginId,name,status,message?,apps:[{app,status,inviteUrl}]}] }
@@ -20,7 +20,7 @@ const ROLE_ALIASES = new Map([
   ["", "member"],
   ["admin", "admin"], ["管理者", "admin"], ["管理", "admin"],
   ["member", "member"], ["一般", "member"], ["一般ユーザー", "member"], ["利用者", "member"],
-  ["worker", "worker"], ["作業者", "worker"],
+  ["worker", "member"], ["作業者", "member"],
 ]);
 function normalizeRole(raw) {
   return ROLE_ALIASES.get(String(raw || "").trim().toLowerCase()) ||
@@ -100,7 +100,7 @@ module.exports = async (req, res) => {
       const role = normalizeRole(roleRaw);
       if (!role) {
         item.status = "error";
-        item.message = "権限は 管理者 / 一般 / 作業者 のいずれかを指定してください";
+        item.message = "権限は 管理者 / 一般 のいずれかを指定してください";
         return item;
       }
       item.role = role;

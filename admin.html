@@ -431,12 +431,11 @@
               <label class="f">権限</label>
               <select id="ufRole">
                 <option value="member">一般</option>
-                <option value="worker">作業者</option>
                 <option value="admin">管理者</option>
               </select>
             </div>
             <div id="ufApproverWrap">
-              <label class="f">承認者（任意・一般/作業者のみ）</label>
+              <label class="f">承認者（任意・一般のみ）</label>
               <select id="ufApprover"></select>
             </div>
           </div>
@@ -506,7 +505,7 @@
           <h2>CSVファイルから一括登録</h2>
           <p style="font-size:12px;color:var(--sub);line-height:1.9">
             1行目はヘッダー <b>社員番号,ユーザー名,部署コード,部署名,職場コード,権限,メール</b>（部署名・職場コード・権限・メールは任意）。文字コードは UTF-8 / Shift_JIS のどちらでも読み込めます。<br />
-            部署は<b>部署コード優先</b>で照合し、コードが空欄の行は部署名で照合します。<b>職場コード</b>を入れるとその職場に配属します（指定した部署の配下である必要があります）。<b>権限</b>は 管理者 / 一般 / 作業者 のいずれか（空欄なら一般）。承認者は職場の管理者が自動で設定されます。登録済みの社員番号はスキップされます。
+            部署は<b>部署コード優先</b>で照合し、コードが空欄の行は部署名で照合します。<b>職場コード</b>を入れるとその職場に配属します（指定した部署の配下である必要があります）。<b>権限</b>は 管理者 / 一般 のいずれか（空欄なら一般。旧CSVの「作業者」は一般として取り込みます）。承認者は職場の管理者が自動で設定されます。登録済みの社員番号はスキップされます。
             <a href="#" class="plain" id="csvTemplate">テンプレートCSVをダウンロード</a>
           </p>
           <label class="f">CSVファイル</label>
@@ -1258,7 +1257,7 @@
 
     // 一覧は「社員番号・氏名・権限・部署・職場」だけを出し、詳細はユーザー名クリックで開く。
     // 列を増やすと横に長くなって読みづらいため。
-    const ROLE_ORDER = { admin: 0, member: 1, worker: 2 };
+    const ROLE_ORDER = { admin: 0, member: 1, worker: 1 };
 
     // 検索・部署絞り込み・並び替えを適用した表示対象を返す
     function visibleUsers() {
@@ -1291,8 +1290,6 @@
     function roleBadgeHtml(u) {
       return (u.role === "admin"
         ? '<span class="badge b-admin">管理者</span>'
-        : u.role === "worker"
-        ? '<span class="badge b-worker">作業者</span>'
         : '<span class="badge b-plain">一般</span>')
         + (u.canManage ? '<span class="badge b-manage">ポータル管理</span>' : "");
     }
@@ -1521,7 +1518,7 @@
       $("ufEmail").value = u.email || "";
       if (u.departmentId) $("ufDept").value = u.departmentId;
       renderUserWorkplaceSelect(u.workplaceId || "");
-      $("ufRole").value = u.role === "admin" ? "admin" : u.role === "worker" ? "worker" : "member";
+      $("ufRole").value = u.role === "admin" ? "admin" : "member";
       $("ufApproverWrap").classList.toggle("hidden", u.role === "admin");
       renderApproverSelect(u.approverUserId || "");
       // ポータル管理権限の付与 UI はマスターセッションのみ表示（サーバー側でも強制）
@@ -1562,7 +1559,7 @@
       msg.classList.add("hidden");
       resBox.classList.add("hidden");
       const roleValue = $("ufRole").value;
-      const role = roleValue === "admin" ? "admin" : roleValue === "worker" ? "worker" : "member";
+      const role = roleValue === "admin" ? "admin" : "member";
       const payload = {
         loginId: $("ufLogin").value.trim(),
         name: $("ufName").value.trim(),
@@ -1802,9 +1799,9 @@
       "": "member",
       admin: "admin", 管理者: "admin", 管理: "admin",
       member: "member", 一般: "member", "一般ユーザー": "member", 利用者: "member",
-      worker: "worker", 作業者: "worker",
+      worker: "member", 作業者: "member",
     };
-    const ROLE_LABELS = { admin: "管理者", member: "一般", worker: "作業者" };
+    const ROLE_LABELS = { admin: "管理者", member: "一般" };
     function csvRole(raw) {
       const s = String(raw || "").trim();
       return CSV_ROLES[s.toLowerCase()] || CSV_ROLES[s] || null;
@@ -1816,7 +1813,7 @@
         CSV_HEADER,
         ["1001", "山田 太郎", "D001", "生産管理部", "W001", "管理者", "taro@example.com"],
         ["1002", "鈴木 花子", "D003", "", "", "一般", ""],
-        ["1003", "佐藤 次郎", "D003", "", "W010", "作業者", ""],
+        ["1003", "佐藤 次郎", "D003", "", "W010", "一般", ""],
       ]);
     });
 
@@ -1924,7 +1921,7 @@
           : null;
       if (!dept) return { ok: false, note: "部署が見つかりません" };
       const role = csvRole(r.role);
-      if (!role) return { ok: false, note: "権限は 管理者 / 一般 / 作業者 のいずれかです" };
+      if (!role) return { ok: false, note: "権限は 管理者 / 一般 のいずれかです" };
       let wp = null;
       if (r.workplaceCode) {
         wp = workplaces.find((w) => String(w.code || "") === r.workplaceCode);
