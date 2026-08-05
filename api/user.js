@@ -42,7 +42,9 @@ const SSO_APP_KEYS = [
 // 管理者専用アプリ。部署にアプリが割り当たっていても、ポータルの管理者（role=admin）か
 // 設定担当者（can_manage）でなければ起動させない。人事管理は給与・人事考課まで扱うため、
 // 部署割当だけを入室条件にはしない。
-const ADMIN_ONLY_APP_KEYS = ["jinji"];
+// 進捗管理(operation)も管理者専用（アプリ側でも role!=='admin' は SSO で弾かれるが、
+// 部署に割り当てた一般ユーザーがタイルを押したときに理由が分かるようにここでも止める）。
+const ADMIN_ONLY_APP_KEYS = ["jinji", "operation"];
 
 const TOKEN_TTL_MS = 60 * 1000;
 
@@ -113,8 +115,10 @@ async function handleLaunch(req, res, app) {
       res.status(403).json({ message: "このアプリは管理者のみが利用できます" });
       return;
     }
-    // role / name も渡し、アプリ側でアカウント未発行でも正しい権限・氏名でログインできるようにする。
+    // role / name / department も渡し、アプリ側でアカウント未発行でも
+    // 正しい権限・氏名・所属でログインできるようにする。
     // canManage はポータル管理権限で、管理者専用アプリが入室可否の判定に使う。
+    // department は進捗管理(operation)のマスタ編集権限の判定に使う。
     // 旧アプリは loginId / app / exp のみを参照するため、追加フィールドがあっても影響しない。
     const payload = Buffer.from(
       JSON.stringify({
@@ -122,6 +126,7 @@ async function handleLaunch(req, res, app) {
         name: profile.name,
         role: profile.role,
         canManage: profile.canManage === true,
+        department: profile.departmentName,
         app,
         exp: Date.now() + TOKEN_TTL_MS,
       })
