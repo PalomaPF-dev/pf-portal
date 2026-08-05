@@ -103,13 +103,16 @@ async function handleLaunch(req, res, app) {
       res.status(403).json({ message: "このアプリを利用する権限がありません" });
       return;
     }
-    // role / name も渡し、アプリ側でアカウント未発行でも正しい権限・氏名でログインできるようにする。
+    // role / name / department も渡し、アプリ側でアカウント未発行でも
+    // 正しい権限・氏名・所属でログインできるようにする。
+    // department は進捗管理(operation)のマスタ編集権限の判定に使う。
     // 旧アプリは loginId / app / exp のみを参照するため、追加フィールドがあっても影響しない。
     const payload = Buffer.from(
       JSON.stringify({
         loginId: profile.loginId,
         name: profile.name,
         role: profile.role,
+        department: profile.departmentName,
         app,
         exp: Date.now() + TOKEN_TTL_MS,
       })
