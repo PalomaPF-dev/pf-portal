@@ -119,6 +119,8 @@ async function handleLaunch(req, res, app) {
     // 正しい権限・氏名・所属でログインできるようにする。
     // canManage はポータル管理権限で、管理者専用アプリが入室可否の判定に使う。
     // department は進捗管理(operation)のマスタ編集権限の判定に使う。
+    // approverLoginId / approverName はポータルの承認者（上司）設定。
+    // 進捗管理が残業申請の承認ルート（申請者→承認者→生産管理部）に使う。
     // 旧アプリは loginId / app / exp のみを参照するため、追加フィールドがあっても影響しない。
     const payload = Buffer.from(
       JSON.stringify({
@@ -127,6 +129,8 @@ async function handleLaunch(req, res, app) {
         role: profile.role,
         canManage: profile.canManage === true,
         department: profile.departmentName,
+        approverLoginId: profile.approverLoginId,
+        approverName: profile.approverName,
         app,
         exp: Date.now() + TOKEN_TTL_MS,
       })
