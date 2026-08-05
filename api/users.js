@@ -1,7 +1,7 @@
 // ユーザー名簿 API（すべて管理セッション専用）。
 // GET    一覧（部署・職場・承認者 join + 発行状況 passwordSet 含む）
-// POST   {loginId,name,email?,departmentId,role?,workplaceId?,approverUserId?} 1名追加 → 部署アプリへプロビジョニング実行 → 結果返却
-// PUT    {id,name?,email?,departmentId?,workplaceId?,role?,approverUserId?,canManage?,managePassword?} 更新 → 再プロビジョニング
+// POST   {loginId,name,email?,departmentId,role?,workplaceId?,approverUserId?,lineworksId?} 1名追加 → 部署アプリへプロビジョニング実行 → 結果返却
+// PUT    {id,name?,email?,departmentId?,workplaceId?,role?,approverUserId?,lineworksId?,canManage?,managePassword?} 更新 → 再プロビジョニング
 //        ※ canManage / managePassword の変更はマスターセッションのみ（設定担当者は不可）
 // DELETE {id} 名簿から削除（※各アプリ側のアカウントは削除しない）
 const { requireSql, ensureSchema, readBody, isUuid } = require("../lib/db");
@@ -82,6 +82,18 @@ async function validateRoleWorkplaceApprover(sql, res, { role, workplaceId, appr
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+// LINE WORKS の宛先ID（api/notify.js の通知先）。メンバーの UUID またはログインID（メール形式）
+// のどちらも入るため形式は緩く、空白を含まない128文字以内のみ検査する。
+// NG なら res に 400 を書いて null、OK なら正規化済みの文字列（未入力は ""）を返す。
+function parseLineworksId(body, res) {
+  const v = String(body.lineworksId || "").trim();
+  if (v && (v.length > 128 || /\s/.test(v))) {
+    res.status(400).json({ message: "LINE WORKS ID は空白を含まない128文字以内で入力してください" });
+    return null;
+  }
+  return v;
+}
+
 /**
  * 人事プロフィール項目（役職・職務・生年月日・入社年月日・雇用体系）を body から取り出して検証。
  * 生年月日・入社年月日・雇用体系は個人情報のため、この管理者専用APIの外
@@ -128,7 +140,7 @@ module.exports = async (req, res) => {
       const users = await sql`
         SELECT u.id, u.login_id, u.name, u.email, u.department_id, u.role,
                u.workplace_id, u.approver_user_id, u.can_manage, u.created_at,
-               u.position_name, u.duty_name, u.employment_type,
+               u.position_name, u.duty_name, u.employment_type, u.lineworks_id,
                to_char(u.birth_date, 'YYYY-MM-DD') AS birth_date,
                to_char(u.hire_date, 'YYYY-MM-DD') AS hire_date,
                d.code AS department_code, d.name AS department_name,
@@ -176,6 +188,7 @@ module.exports = async (req, res) => {
           birthDate: u.birth_date,
           hireDate: u.hire_date,
           employmentType: u.employment_type,
+          lineworksId: u.lineworks_id,
           provisions: byUser.get(u.id) || [],
         }))
       );
@@ -217,6 +230,8 @@ module.exports = async (req, res) => {
       if (!v) return;
       const prof = parseProfileFields(body, res);
       if (!prof) return;
+      const lineworksId = parseLineworksId(body, res);
+      if (lineworksId === null) return;
       const dup = await sql`SELECT 1 FROM pf_portal_users WHERE login_id = ${loginId} LIMIT 1`;
       if (dup.length > 0) {
         res.status(409).json({ message: "この社員番号（ID）は登録済みです" });
@@ -225,9 +240,9 @@ module.exports = async (req, res) => {
       const inserted = await sql`
         INSERT INTO pf_portal_users
           (login_id, name, email, department_id, role, workplace_id, approver_user_id,
-           position_name, duty_name, birth_date, hire_date, employment_type)
+           position_name, duty_name, birth_date, hire_date, employment_type, lineworks_id)
         VALUES (${loginId}, ${name}, ${email || null}, ${departmentId}, ${v.role}, ${v.workplaceId}, ${v.approverUserId},
-                ${prof.positionName}, ${prof.dutyName}, ${prof.birthDate}, ${prof.hireDate}, ${prof.employmentType})
+                ${prof.positionName}, ${prof.dutyName}, ${prof.birthDate}, ${prof.hireDate}, ${prof.employmentType}, ${lineworksId || null})
         RETURNING id, login_id, name, email, department_id, role, workplace_id, approver_user_id`;
       const user = inserted[0];
 
@@ -269,7 +284,7 @@ module.exports = async (req, res) => {
       }
       const cur = await sql`
         SELECT id, login_id, name, email, department_id, role, workplace_id, approver_user_id,
-               can_manage, manage_password_hash
+               can_manage, manage_password_hash, lineworks_id
         FROM pf_portal_users WHERE id = ${id} LIMIT 1`;
       if (cur.length === 0) {
         res.status(404).json({ message: "対象のユーザーが見つかりません" });
@@ -327,6 +342,14 @@ module.exports = async (req, res) => {
 
       const prof = parseProfileFields(body, res);
       if (!prof) return;
+      // lineworksId 未送信（旧クライアント）は既存値を保持。"" は「消す」の意思として NULL 化する
+      let lineworksId;
+      if (body.lineworksId === undefined) {
+        lineworksId = String(prev.lineworks_id || "");
+      } else {
+        lineworksId = parseLineworksId(body, res);
+        if (lineworksId === null) return;
+      }
       const updated = await sql`
         UPDATE pf_portal_users
         SET name = ${name}, email = ${email || null}, department_id = ${departmentId},
@@ -335,7 +358,7 @@ module.exports = async (req, res) => {
             manage_password_hash = COALESCE(${managePasswordHash}, manage_password_hash),
             position_name = ${prof.positionName}, duty_name = ${prof.dutyName},
             birth_date = ${prof.birthDate}, hire_date = ${prof.hireDate},
-            employment_type = ${prof.employmentType}
+            employment_type = ${prof.employmentType}, lineworks_id = ${lineworksId || null}
         WHERE id = ${id}
         RETURNING id, login_id, name, email, department_id, role, workplace_id, approver_user_id, can_manage`;
       const user = updated[0];

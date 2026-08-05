@@ -507,6 +507,14 @@
               <input type="text" id="ufEmployment" placeholder="例: 正社員 / パート" />
             </div>
           </div>
+          <div class="row2">
+            <div>
+              <label class="f">LINE WORKS ID（任意）</label>
+              <input type="text" id="ufLineworks" placeholder="例: taro@paloma-pf" />
+              <div class="help">承認通知などのLINE WORKS送信先（メンバーのログインID）。未入力の場合はメールアドレスを宛先に使います</div>
+            </div>
+            <div></div>
+          </div>
           <!-- 人事項目はポータル管理者専用API（この画面）だけが扱う。アプリ連携・一般ユーザーには出ない -->
           <div class="row2">
             <div>
@@ -566,6 +574,7 @@
         <div class="note">
           発行状況: <span class="badge b-created">連携済み</span>=アプリにアカウント連携済み（ポータルから自動ログイン可） / <span class="badge b-error">エラー</span>=連携失敗（「状況更新」で再連携。解消しない場合はアプリの更新状況を確認）。アプリ個別のパスワード設定は不要です（ポータルで一括ログイン）。<br />
           承認者を指定しない一般ユーザーは、所属する職場の管理者（職場に管理者を指定していない場合は、<strong>その職場に所属する管理者権限のユーザー</strong>）が承認者になります。管理者にも承認者を指定できます（管理者本人の申請を上位者へ回す場合）。承認者の変更は各アプリへ自動で連携されます。<br />
+          <strong>LINE WORKS ID</strong>を登録すると、各アプリの承認通知などをLINE WORKSのBotメッセージで受け取れます（未登録の場合はメールアドレスを宛先に使います。サーバー側のLINE WORKS設定が必要です）。ユーザー詳細の「テスト送信」で疎通を確認できます。<br />
           権限の<span class="badge b-admin">管理者</span>は<strong>各アプリの承認フロー上の役割</strong>で、このポータル管理画面にはログインできません。管理画面に入れるのは<span class="badge b-manage">ポータル管理</span>（ポータル管理権限）を付与されたユーザーとマスターパスワードのみです。<br />
           <strong>名簿から削除しても、各アプリ側のアカウントは削除されません。</strong>アプリ側のアカウント削除は各アプリの管理機能で行ってください。
         </div>
@@ -1611,6 +1620,7 @@
         row("職場", wp) +
         row("承認者", approverCellHtml(u)) +
         row("メール", u.email ? esc(u.email) : '<span class="sub">未登録</span>') +
+        row("LINE WORKS", lineworksCellHtml(u)) +
         row("役職", u.positionName ? esc(u.positionName) : '<span class="sub">—</span>') +
         row("職務", u.dutyName ? esc(u.dutyName) : '<span class="sub">—</span>') +
         row("生年月日", u.birthDate
@@ -1620,7 +1630,34 @@
         row("雇用体系", u.employmentType ? esc(u.employmentType) : '<span class="sub">—</span>') +
         row("発行状況", provisionBadges(u.provisions)) +
         '<div class="sub" style="margin-top:8px;font-size:10.5px">生年月日・年齢・入社年月日・雇用体系はポータル管理者のみ閲覧できます（アプリには連携されません）</div>';
+      // LINE WORKS テスト送信（宛先があるときだけボタンを出す）
+      const lwBtn = $("umLwTest");
+      if (lwBtn) {
+        lwBtn.addEventListener("click", async () => {
+          lwBtn.disabled = true;
+          lwBtn.textContent = "送信中…";
+          try {
+            await api("/api/notify", { method: "POST", body: JSON.stringify({ test: true, loginId: u.loginId }) });
+            lwBtn.textContent = "送信しました";
+          } catch (e) {
+            lwBtn.textContent = "テスト送信";
+            lwBtn.disabled = false;
+            $("umBody").insertAdjacentHTML("afterbegin", '<div class="msg err">' + esc(e.message) + "</div>");
+          }
+        });
+      }
       $("userModal").classList.remove("hidden");
+    }
+
+    // LINE WORKS 宛先セル: 本人のLINE WORKS ID → メール（フォールバック） → 未登録
+    function lineworksCellHtml(u) {
+      const dest = u.lineworksId
+        ? esc(u.lineworksId)
+        : u.email
+          ? esc(u.email) + '<span class="sub">（メールを宛先に使用）</span>'
+          : "";
+      if (!dest) return '<span class="sub">未登録</span>';
+      return dest + ' <button type="button" class="mini" id="umLwTest" style="margin-left:8px">テスト送信</button>';
     }
     function closeUserDetail() { $("userModal").classList.add("hidden"); detailUser = null; }
     $("umClose").addEventListener("click", closeUserDetail);
@@ -1700,6 +1737,7 @@
       $("ufEmployment").value = u.employmentType || "";
       $("ufBirth").value = u.birthDate || "";
       $("ufHire").value = u.hireDate || "";
+      $("ufLineworks").value = u.lineworksId || "";
       updateUfAge();
       if (u.departmentId) $("ufDept").value = u.departmentId;
       renderUserWorkplaceSelect(u.workplaceId || "");
@@ -1728,6 +1766,7 @@
       $("ufEmployment").value = "";
       $("ufBirth").value = "";
       $("ufHire").value = "";
+      $("ufLineworks").value = "";
       updateUfAge();
       renderUserWorkplaceSelect("");
       $("ufRole").value = "member";
@@ -1762,6 +1801,7 @@
         employmentType: $("ufEmployment").value.trim(),
         birthDate: $("ufBirth").value,
         hireDate: $("ufHire").value,
+        lineworksId: $("ufLineworks").value.trim(),
       };
       if ((!editingUserId && !payload.loginId) || !payload.name) {
         msg.textContent = "社員番号とユーザー名を入力してください";
