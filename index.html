@@ -497,7 +497,7 @@
     // 管理者専用アプリ。部署に割り当たっていても、管理者（role=admin）と
     // 設定担当者（can_manage）以外のタイルには出さない。
     // ※ 表示を絞るだけでは防御にならないので、起動側（api/user.js）でも同じ条件で弾いている。
-    const ADMIN_ONLY_APPS = new Set(["jinji"]);
+    const ADMIN_ONLY_APPS = new Set(["jinji", "operation"]);
     // サンプル事例（デモ）を表示できるアプリ。<app>/login?demo=1 でサンプルデータ入りのデモが直接開く。
     // nippou(生産日報) はデモ機能なし、zumen は端末内アプリのため対象外。
     const DEMO_APPS = new Set(["keikaku","sekisai","keisoku","setsubi","hinshitsu","zaiko","kanagata","hoju","tenchu"]);
