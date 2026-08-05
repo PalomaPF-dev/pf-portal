@@ -13,7 +13,7 @@
 const crypto = require("crypto");
 const { requireSql, ensureSchema, readBody } = require("../lib/db");
 const { requireManageSession } = require("../lib/portalAuth");
-const { configStatus, sendTextToUser, MAX_TEXT_LEN } = require("../lib/lineworks");
+const { configStatus, sendTextToUser, diagnosePrivateKey, MAX_TEXT_LEN } = require("../lib/lineworks");
 
 // 通知の見出しに使うアプリ表示名（index.html の APPS / api/contact.js と同じキー）
 const APP_NAMES = {
@@ -58,10 +58,11 @@ module.exports = async (req, res) => {
     await ensureSchema(sql);
 
     // ===== 設定状態（管理画面） =====
+    // privateKey は鍵の「形」だけの診断（本体は含まない）。貼り付け崩れの切り分けに使う。
     if (req.method === "GET") {
       if (!(await requireManageSession(req, res, sql))) return;
       const st = configStatus();
-      res.status(200).json({ configured: st.ok, missing: st.missing });
+      res.status(200).json({ configured: st.ok, missing: st.missing, privateKey: diagnosePrivateKey() });
       return;
     }
 
