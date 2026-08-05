@@ -503,27 +503,9 @@
               <input type="text" id="ufDuty" placeholder="例: 安全推進工場長室" />
             </div>
             <div>
-              <label class="f">雇用体系名称（任意・ポータル管理者のみ閲覧）</label>
-              <input type="text" id="ufEmployment" placeholder="例: 正社員 / パート" />
-            </div>
-          </div>
-          <div class="row2">
-            <div>
               <label class="f">LINE WORKS ID（任意）</label>
               <input type="text" id="ufLineworks" placeholder="例: taro@paloma-pf" />
               <div class="help">承認通知などのLINE WORKS送信先（メンバーのログインID）。未入力の場合はメールアドレスを宛先に使います</div>
-            </div>
-            <div></div>
-          </div>
-          <!-- 人事項目はポータル管理者専用API（この画面）だけが扱う。アプリ連携・一般ユーザーには出ない -->
-          <div class="row2">
-            <div>
-              <label class="f">生年月日（任意・ポータル管理者のみ閲覧）<span class="sub" id="ufAge" style="margin-left:6px"></span></label>
-              <input type="date" id="ufBirth" />
-            </div>
-            <div>
-              <label class="f">入社年月日（任意・ポータル管理者のみ閲覧）</label>
-              <input type="date" id="ufHire" />
             </div>
           </div>
           <!-- ポータル管理権限（マスターログイン時・編集時のみ表示） -->
@@ -586,9 +568,9 @@
         <div class="card">
           <h2>CSVファイルから一括登録</h2>
           <p style="font-size:12px;color:var(--sub);line-height:1.9">
-            1行目はヘッダー <b>社員番号,ユーザー名,部署コード,部署名,職場コード,職場名,権限,承認者社員番号,メール,役職名称,職務名称,生年月日,入社年月日,雇用体系名称</b>（社員番号・ユーザー名以外は任意）。文字コードは UTF-8 / Shift_JIS のどちらでも読み込めます。<br />
-            未登録の職場コードは、職場名があれば部署配下に自動作成します。<b>登録済みの社員番号は人事項目（役職・職務・生年月日・入社年月日・雇用体系）と承認者のみ更新</b>し、部署・権限・アカウントは変更しません（アプリへの連携はやり直します）。<br />
-            生年月日・年齢（自動計算）・入社年月日・雇用体系名称は<b>ポータル管理者のみ閲覧</b>できる項目です（アプリには連携されません）。<br />
+            1行目はヘッダー <b>社員番号,ユーザー名,部署コード,部署名,職場コード,職場名,権限,承認者社員番号,メール,役職名称,職務名称</b>（社員番号・ユーザー名以外は任意）。文字コードは UTF-8 / Shift_JIS のどちらでも読み込めます。<br />
+            未登録の職場コードは、職場名があれば部署配下に自動作成します。<b>登録済みの社員番号は役職・職務・承認者のみ更新</b>し、部署・権限・アカウントは変更しません（アプリへの連携はやり直します）。<br />
+            生年月日・年齢・入社年月日・雇用体系はポータルでは<b>登録も表示もしません</b>（CSVに列があっても読み飛ばします）。<br />
             部署は<b>部署コード優先</b>で照合し、コードが空欄の行は部署名で照合します。<b>職場コード</b>を入れるとその職場に配属します（指定した部署の配下である必要があります）。<b>権限</b>は 管理者 / 一般 のいずれか（空欄なら一般。旧CSVの「作業者」は一般として取り込みます）。<b>承認者社員番号</b>にその人の申請を承認する管理者の社員番号を入れると、承認者として設定されます（管理者にも指定できます。同じCSV内で登録する管理者も指定可）。空欄の一般ユーザーは<b>同じ職場の管理者</b>が自動で承認者になります。
             <a href="#" class="plain" id="csvTemplate">テンプレートCSVをダウンロード</a>
           </p>
@@ -894,7 +876,6 @@
       }
     }
     $("inqReload").addEventListener("click", loadInquiries);
-    $("ufBirth").addEventListener("input", updateUfAge);
 
     // ===== 回答入力モーダル =====
     let replyTarget = null;
@@ -1411,22 +1392,6 @@
     // 日本語の並び比較（部署コード・氏名など）
     const cmpJa = (a, b) => String(a || "").localeCompare(String(b || ""), "ja");
 
-    // 生年月日（YYYY-MM-DD）から満年齢を計算（保存はせず表示のたびに計算する）
-    function ageFrom(dateStr) {
-      if (!dateStr) return null;
-      const d = new Date(dateStr + "T00:00:00");
-      if (Number.isNaN(d.getTime())) return null;
-      const now = new Date();
-      let age = now.getFullYear() - d.getFullYear();
-      const m = now.getMonth() - d.getMonth();
-      if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
-      return age >= 0 && age <= 130 ? age : null;
-    }
-    function updateUfAge() {
-      const a = ageFrom($("ufBirth").value);
-      $("ufAge").textContent = a == null ? "" : `（満${a}歳・自動計算）`;
-    }
-
     /**
      * 開閉マークの山形アイコン。閉じているときは右向き、開くと下向き（CSSで90度回転）。
      * 三角の文字（▶等）は環境によって絵文字で描画されるため SVG で描く。
@@ -1623,13 +1588,7 @@
         row("LINE WORKS", lineworksCellHtml(u)) +
         row("役職", u.positionName ? esc(u.positionName) : '<span class="sub">—</span>') +
         row("職務", u.dutyName ? esc(u.dutyName) : '<span class="sub">—</span>') +
-        row("生年月日", u.birthDate
-          ? esc(u.birthDate) + (ageFrom(u.birthDate) != null ? '<span class="sub">（満' + ageFrom(u.birthDate) + '歳）</span>' : "")
-          : '<span class="sub">—</span>') +
-        row("入社年月日", u.hireDate ? esc(u.hireDate) : '<span class="sub">—</span>') +
-        row("雇用体系", u.employmentType ? esc(u.employmentType) : '<span class="sub">—</span>') +
-        row("発行状況", provisionBadges(u.provisions)) +
-        '<div class="sub" style="margin-top:8px;font-size:10.5px">生年月日・年齢・入社年月日・雇用体系はポータル管理者のみ閲覧できます（アプリには連携されません）</div>';
+        row("発行状況", provisionBadges(u.provisions));
       // LINE WORKS テスト送信（宛先があるときだけボタンを出す）
       const lwBtn = $("umLwTest");
       if (lwBtn) {
@@ -1734,11 +1693,7 @@
       $("ufEmail").value = u.email || "";
       $("ufPosition").value = u.positionName || "";
       $("ufDuty").value = u.dutyName || "";
-      $("ufEmployment").value = u.employmentType || "";
-      $("ufBirth").value = u.birthDate || "";
-      $("ufHire").value = u.hireDate || "";
       $("ufLineworks").value = u.lineworksId || "";
-      updateUfAge();
       if (u.departmentId) $("ufDept").value = u.departmentId;
       renderUserWorkplaceSelect(u.workplaceId || "");
       $("ufRole").value = u.role === "admin" ? "admin" : "member";
@@ -1763,11 +1718,7 @@
       $("ufEmail").value = "";
       $("ufPosition").value = "";
       $("ufDuty").value = "";
-      $("ufEmployment").value = "";
-      $("ufBirth").value = "";
-      $("ufHire").value = "";
       $("ufLineworks").value = "";
-      updateUfAge();
       renderUserWorkplaceSelect("");
       $("ufRole").value = "member";
       renderApproverSelect("");
@@ -1798,9 +1749,6 @@
         approverUserId: $("ufApprover").value || null,
         positionName: $("ufPosition").value.trim(),
         dutyName: $("ufDuty").value.trim(),
-        employmentType: $("ufEmployment").value.trim(),
-        birthDate: $("ufBirth").value,
-        hireDate: $("ufHire").value,
         lineworksId: $("ufLineworks").value.trim(),
       };
       if ((!editingUserId && !payload.loginId) || !payload.name) {
@@ -2167,7 +2115,7 @@
     });
 
     // ===== ③ CSV一括登録 =====
-    const CSV_HEADER = ["社員番号", "ユーザー名", "部署コード", "部署名", "職場コード", "職場名", "権限", "承認者社員番号", "メール", "役職名称", "職務名称", "生年月日", "入社年月日", "雇用体系名称"];
+    const CSV_HEADER = ["社員番号", "ユーザー名", "部署コード", "部署名", "職場コード", "職場名", "権限", "承認者社員番号", "メール", "役職名称", "職務名称"];
     let csvRows = []; // [{loginId,name,departmentCode,departmentName,workplaceCode,role,approverLoginId,email}]
     let csvResults = []; // 結果（rows + apps）
     let fileNames = new Map(); // 読み込んだCSV内の 社員番号→氏名（承認者名の表示に使う）
@@ -2189,9 +2137,9 @@
       e.preventDefault();
       downloadCsv("portal-users-template.csv", [
         CSV_HEADER,
-        ["1001", "山田 太郎", "D001", "生産管理部", "W001", "管理課", "管理者", "", "taro@example.com", "課長", "生産管理", "1980-04-01", "2005-04-01", "正社員"],
-        ["1002", "鈴木 花子", "D003", "", "", "", "一般", "1001", "", "", "", "", "", ""],
-        ["1003", "佐藤 次郎", "D003", "", "W010", "第1ライン", "一般", "", "", "係長", "", "1975-10-15", "1998-04-01", "正社員"],
+        ["1001", "山田 太郎", "D001", "生産管理部", "W001", "管理課", "管理者", "", "taro@example.com", "課長", "生産管理"],
+        ["1002", "鈴木 花子", "D003", "", "", "", "一般", "1001", "", "", ""],
+        ["1003", "佐藤 次郎", "D003", "", "W010", "第1ライン", "一般", "", "", "係長", ""],
       ]);
     });
 
@@ -2271,18 +2219,15 @@
         if (iWpName === iDept) iWpName = -1;
         const iPos = head.findIndex((h) => h === "役職名称" || h === "役職");
         const iDuty = head.findIndex((h) => h === "職務名称" || h === "職務");
-        const iBirth = find("生年月日");
-        const iHire = head.findIndex((h) => h === "入社年月日" || h === "入社日" || h.includes("入社"));
-        const iEmp = head.findIndex((h) => h === "雇用体系名称" || h === "雇用体系" || h.includes("雇用"));
         // 承認者（＝その人の申請を承認する管理者）の社員番号。名簿の「管理者」列も受け付ける。
         // 「承認者名／管理者名」を拾わないよう完全一致のみで探す
         const iApv = head.findIndex((h) => h === "承認者社員番号" || h === "管理者社員番号" || h === "承認者" || h === "管理者");
         // 見出し行がある場合は見つかった列だけを使う（-1 = その列は空扱い）。
         // 列が無いときに既定の並びへ戻すと、列順を入れ替えたCSVで別の列を拾ってしまうため。
         idx = { loginId: iLogin, name: iName, code: iCode, deptName: iDept, wpCode: iWp, role: iRole, email: iMail,
-                wpName: iWpName, pos: iPos, duty: iDuty, birth: iBirth, hire: iHire, emp: iEmp, apv: iApv };
+                wpName: iWpName, pos: iPos, duty: iDuty, apv: iApv };
       } else {
-        idx = { ...idx, wpName: -1, pos: -1, duty: -1, birth: -1, hire: -1, emp: -1, apv: -1 };
+        idx = { ...idx, wpName: -1, pos: -1, duty: -1, apv: -1 };
       }
       const cell = (r, i) => (i >= 0 ? String(r[i] || "").trim() : "");
       const out = [];
@@ -2301,9 +2246,6 @@
           email: cell(r, idx.email),
           positionName: cell(r, idx.pos),
           dutyName: cell(r, idx.duty),
-          birthDate: cell(r, idx.birth),
-          hireDate: cell(r, idx.hire),
-          employmentType: cell(r, idx.emp),
         });
       }
       return out;

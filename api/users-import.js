@@ -1,20 +1,20 @@
 // CSV 一括登録 API（管理者専用）。
 // POST {rows:[{loginId,name,departmentCode?,departmentName?,workplaceCode?,workplaceName?,role?,email?,
-//              approverLoginId?,positionName?,dutyName?,birthDate?,hireDate?,employmentType?}]}
+//              approverLoginId?,positionName?,dutyName?}]}
 //      （1リクエスト最大200行）
 //  - 部署の解決は「部署コード優先」→ コード空欄なら部署名で照合。どちらも不一致なら error
 //  - 職場は職場コードで照合（任意）。未登録のコードでも職場名があれば部署配下に自動作成する
 //    （名簿CSVからの一括展開用）。登録済みコードが別部署配下なら error
 //  - 権限は 管理者/admin・一般/member。空欄なら一般(member)。旧「作業者/worker」は一般として取り込む
-//  - login_id が DB 既存の場合は、人事プロフィール項目（役職・職務・生年月日・入社年月日・雇用体系）
-//    だけを更新して status:'updated'（部署・職場・権限・アカウントは変更しない）。あわせて DB の
+//  - login_id が DB 既存の場合は、役職・職務と承認者だけを更新して status:'updated'
+//    （部署・職場・権限・アカウントは変更しない）。あわせて DB の
 //    現在値でアプリへ再連携する（承認者＝職場の管理者の変更を行き渡らせるため）。
 //    同一バッチ内の重複は status:'duplicate'
 //  - 承認者は 名簿の承認者社員番号（approverLoginId）→ 職場の管理者（指定）→ 職場に所属する管理者
 //    （社員番号順で最初）の順で解決。管理者本人の承認者は名簿での明示指定のみ。
 //    承認者は同じリクエスト内で登録した人も対象（INSERT 後に解決する）。前のチャンクにいない
 //    承認者は解決できないため、クライアントは取り込み後に /api/users-approvers で再設定する
-//  - 生年月日・入社年月日・雇用体系は個人情報。管理者専用APIの外には出さないこと（年齢は保存しない）
+//  - 生年月日・年齢・入社年月日・雇用体系はポータルでは扱わない（CSVに列があっても読み飛ばす）
 //  - 新規は INSERT → プロビジョニング（アプリごとにまとめて1リクエスト）
 // レスポンス: { rows: [{loginId,name,status,message?,apps:[{app,status,inviteUrl}]}] }
 const { requireSql, ensureSchema, readBody } = require("../lib/db");
@@ -33,16 +33,6 @@ const ROLE_ALIASES = new Map([
   ["member", "member"], ["一般", "member"], ["一般ユーザー", "member"], ["利用者", "member"],
   ["worker", "member"], ["作業者", "member"],
 ]);
-// 日付の正規化: YYYY-MM-DD / YYYY/M/D を受け付けて ISO (YYYY-MM-DD) へ。空は null。不正は undefined。
-function normalizeDate(raw) {
-  const v = String(raw || "").trim();
-  if (!v) return null;
-  const m = v.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
-  if (!m) return undefined;
-  const iso = `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
-  return Number.isNaN(Date.parse(iso)) ? undefined : iso;
-}
-
 function normalizeRole(raw) {
   return ROLE_ALIASES.get(String(raw || "").trim().toLowerCase()) ||
     ROLE_ALIASES.get(String(raw || "").trim()) || null;
@@ -97,19 +87,11 @@ module.exports = async (req, res) => {
       if (approverLoginId === loginId || !LOGIN_ID_RE.test(approverLoginId)) approverLoginId = "";
       const positionName = String((r && r.positionName) || "").trim().slice(0, 100) || null;
       const dutyName = String((r && r.dutyName) || "").trim().slice(0, 100) || null;
-      const employmentType = String((r && r.employmentType) || "").trim().slice(0, 100) || null;
-      const birthDate = normalizeDate(r && r.birthDate);
-      const hireDate = normalizeDate(r && r.hireDate);
       const item = {
         loginId, name, departmentCode, departmentName, workplaceCode, workplaceName, email, approverLoginId,
-        positionName, dutyName, employmentType, birthDate, hireDate,
+        positionName, dutyName,
         role: "member", status: null, message: null, dept: null, workplace: null,
       };
-      if (birthDate === undefined || hireDate === undefined) {
-        item.status = "error";
-        item.message = "生年月日・入社年月日は YYYY-MM-DD（または YYYY/M/D）形式で入力してください";
-        return item;
-      }
       if (!loginId || !LOGIN_ID_RE.test(loginId) || loginId.length > 64) {
         item.status = "error";
         item.message = "社員番号（ID）が不正です（半角英数字と - _ @ . ）";
@@ -232,14 +214,11 @@ module.exports = async (req, res) => {
     for (const it of toUpdate) {
       await sql`
         UPDATE pf_portal_users
-        SET position_name   = COALESCE(${it.positionName}, position_name),
-            duty_name       = COALESCE(${it.dutyName}, duty_name),
-            birth_date      = COALESCE(${it.birthDate}, birth_date),
-            hire_date       = COALESCE(${it.hireDate}, hire_date),
-            employment_type = COALESCE(${it.employmentType}, employment_type)
+        SET position_name = COALESCE(${it.positionName}, position_name),
+            duty_name     = COALESCE(${it.dutyName}, duty_name)
         WHERE login_id = ${it.loginId}`;
       it.status = "updated";
-      it.message = "登録済みのため人事項目を更新し、アプリへ再連携しました（部署・権限・アカウントは変更していません）";
+      it.message = "登録済みのため役職・職務と承認者を更新し、アプリへ再連携しました（部署・権限・アカウントは変更していません）";
     }
 
     // 新規をまとめて INSERT
@@ -253,13 +232,10 @@ module.exports = async (req, res) => {
       const workplaceIds = toInsert.map((it) => (it.workplace ? it.workplace.id : null));
       const positions = toInsert.map((it) => it.positionName);
       const duties = toInsert.map((it) => it.dutyName);
-      const births = toInsert.map((it) => it.birthDate);
-      const hires = toInsert.map((it) => it.hireDate);
-      const employments = toInsert.map((it) => it.employmentType);
       const inserted = await sql`
         INSERT INTO pf_portal_users
           (login_id, name, email, department_id, role, workplace_id,
-           position_name, duty_name, birth_date, hire_date, employment_type)
+           position_name, duty_name)
         SELECT * FROM unnest(
           ${loginIds}::text[],
           ${names}::text[],
@@ -268,10 +244,7 @@ module.exports = async (req, res) => {
           ${roles}::text[],
           ${workplaceIds}::uuid[],
           ${positions}::text[],
-          ${duties}::text[],
-          ${births}::date[],
-          ${hires}::date[],
-          ${employments}::text[]
+          ${duties}::text[]
         )
         ON CONFLICT (login_id) DO NOTHING
         RETURNING id, login_id, name, email`;
