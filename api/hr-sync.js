@@ -3,6 +3,7 @@
 // 人事管理が「人」のマスターで、ここへ所属・役職・人事プロフィールが送られてくる。
 // パスワード・アプリ権限（role / can_manage / apps 割当）・承認者は送られてこないし、
 // このAPIでも一切変更しない（それらはポータルが持つ情報のため）。
+// ※ 生年月日は受け取っても保存しない（ポータルでは保持しない方針。原本は人事管理アプリ側）。
 //
 // 所属が変わった在籍者だけ、既存の provisionUsers() で各業務アプリへ再連携する。
 // これにより「人事管理で発令 → 各アプリの部署・権限が追従」が成立する。
@@ -164,6 +165,8 @@ module.exports = async (req, res) => {
 
         // 人事項目と所属だけを更新する。role・can_manage・password_hash・
         // approver_user_id には触れない（ポータルが持つ情報のため）。
+        // ※ 生年月日（e.birthDate）は送られてきても保存しない。ポータルでは保持しない方針のため
+        //   （人事管理アプリ側が原本を持つ）。列自体も削除済み（lib/db.js）。
         await sql`
           UPDATE pf_portal_users SET
             name            = COALESCE(${nz(e.name)}, name),
@@ -171,7 +174,6 @@ module.exports = async (req, res) => {
             workplace_id    = ${wpId},
             position_name   = ${nz(e.positionName)},
             duty_name       = ${nz(e.dutyName)},
-            birth_date      = ${nzDate(e.birthDate)},
             hire_date       = ${nzDate(e.hireDate)},
             employment_type = ${nz(e.employmentType)},
             email           = COALESCE(${nz(e.email)}, email)
