@@ -26,7 +26,12 @@ Botメッセージとして届けるための連携です。ポータルが LINE
 3. **Private Key の発行**
    - 同画面で「Private Key」を発行・ダウンロード（PEMファイル）
 4. **OAuth Scope の設定**
-   - アプリのスコープに **`bot`** を追加
+   - アプリのスコープに **`bot`** を追加して保存する
+   - ここを忘れると、トークン取得時に
+     `invalid_scope: Request scope is not valid.` で失敗する
+   - 保存直後は反映まで数分かかることがある
+   - Console のスコープ名が `bot` と異なる場合は、環境変数 `LINEWORKS_SCOPE`
+     にその名前を設定する（スペース区切りで複数指定も可）
 5. **Bot の登録**
    - 「Bot」→「登録」で通知用Botを作成（例: 名前 `業務ポータル`）
    - **Bot ID**（数字）を控える
@@ -44,6 +49,7 @@ Botメッセージとして届けるための連携です。ポータルが LINE
 | `LINEWORKS_SERVICE_ACCOUNT` | Service Account ID（`xxxxx.serviceaccount@…`） |
 | `LINEWORKS_PRIVATE_KEY` | Private Key（PEMの中身をそのまま貼り付け。`\n` エスケープ表記でも可） |
 | `LINEWORKS_BOT_ID` | Bot ID |
+| `LINEWORKS_SCOPE` | （任意）要求するスコープ。未設定なら `bot` |
 
 設定後に再デプロイすると有効になります。未設定の間は送信をスキップするだけで、
 既存機能への影響はありません。
@@ -115,6 +121,7 @@ https://purchasing.paloma-pf.com/#approvals
 | --- | --- |
 | テスト送信で「LINE WORKS が未設定です」 | 表示された環境変数をVercelに設定し再デプロイ |
 | トークン取得に失敗（`invalid_client` 等） | Client ID / Secret / Service Account / Private Key の値。Private Keyの改行が保たれているか |
+| `invalid_scope: Request scope is not valid.` | アプリの OAuth Scope に `bot` が未追加。追加・保存して数分待つ。名前が違う場合は `LINEWORKS_SCOPE` で指定 |
 | 送信でHTTP 403 | アプリのスコープに `bot` があるか。Botが管理者画面で公開されているか |
 | 送信でHTTP 404 | Bot IDが正しいか。宛先ID（ログインID／メール）がLINE WORKSのメンバーと一致しているか |
 | 届かないがエラーも出ない | 対象ユーザーの `sent:false` 応答（reason）をアプリ側ログで確認 |
