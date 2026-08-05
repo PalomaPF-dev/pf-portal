@@ -92,7 +92,41 @@ Content-Type: application/json
 https://purchasing.paloma-pf.com/#approvals
 ```
 
-レスポンス:
+### 関係者へ一斉通知（複数宛て）
+
+`loginId` の代わりに `loginIds`（配列・最大100名）を渡すと、関係者へまとめて送れます。
+同じ社員番号は自動で重複排除されます。
+
+```
+POST https://portal.paloma-pf.com/api/notify
+
+{
+  "key":      "<PF_PROVISION_KEY>",
+  "loginIds": ["12345", "23456", "34567"],
+  "app":      "hinshitsu",
+  "title":    "不具合報告",
+  "message":  "第一工場のライン2で不具合報告が登録されました。",
+  "url":      "https://hinshitsu.paloma-pf.com/#reports"
+}
+```
+
+宛先ごとの結果が返ります（一部が届かなくても全体は 200）。
+
+```json
+{
+  "ok": true, "sentCount": 2, "total": 3,
+  "results": [
+    {"loginId": "12345", "sent": true},
+    {"loginId": "23456", "sent": true},
+    {"loginId": "34567", "sent": false, "reason": "no-destination"}
+  ]
+}
+```
+
+`reason` は単数送信時と同じ値（`user-not-found` / `no-destination` / `send-failed` /
+`not-configured`）です。誰に届かなかったかを呼び出し元で記録・表示できます。
+
+### レスポンス（1名宛て）
 
 | 状況 | ステータス | ボディ |
 | --- | --- | --- |
