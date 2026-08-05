@@ -39,6 +39,11 @@ const SSO_APP_KEYS = [
   "operation",
 ];
 
+// 管理者専用アプリ。部署にアプリが割り当たっていても、ポータルの管理者（role=admin）か
+// 設定担当者（can_manage）でなければ起動させない。人事管理は給与・人事考課まで扱うため、
+// 部署割当だけを入室条件にはしない。
+const ADMIN_ONLY_APP_KEYS = ["jinji"];
+
 const TOKEN_TTL_MS = 60 * 1000;
 
 const RL = new Map();
@@ -103,13 +108,20 @@ async function handleLaunch(req, res, app) {
       res.status(403).json({ message: "このアプリを利用する権限がありません" });
       return;
     }
+    const isPortalAdmin = profile.role === "admin" || profile.canManage === true;
+    if (ADMIN_ONLY_APP_KEYS.includes(app) && !isPortalAdmin) {
+      res.status(403).json({ message: "このアプリは管理者のみが利用できます" });
+      return;
+    }
     // role / name も渡し、アプリ側でアカウント未発行でも正しい権限・氏名でログインできるようにする。
+    // canManage はポータル管理権限で、管理者専用アプリが入室可否の判定に使う。
     // 旧アプリは loginId / app / exp のみを参照するため、追加フィールドがあっても影響しない。
     const payload = Buffer.from(
       JSON.stringify({
         loginId: profile.loginId,
         name: profile.name,
         role: profile.role,
+        canManage: profile.canManage === true,
         app,
         exp: Date.now() + TOKEN_TTL_MS,
       })

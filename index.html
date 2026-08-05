@@ -494,6 +494,10 @@
     };
     // SSOで自動ログインできるアプリ（zumen 以外）
     const SSO_APPS = new Set(["keikaku","nippou","sekisai","keisoku","setsubi","hinshitsu","zaiko","kanagata","hoju","tenchu","purchasing","jinji","operation"]);
+    // 管理者専用アプリ。部署に割り当たっていても、管理者（role=admin）と
+    // 設定担当者（can_manage）以外のタイルには出さない。
+    // ※ 表示を絞るだけでは防御にならないので、起動側（api/user.js）でも同じ条件で弾いている。
+    const ADMIN_ONLY_APPS = new Set(["jinji"]);
     // サンプル事例（デモ）を表示できるアプリ。<app>/login?demo=1 でサンプルデータ入りのデモが直接開く。
     // nippou(生産日報) はデモ機能なし、zumen は端末内アプリのため対象外。
     const DEMO_APPS = new Set(["keikaku","sekisai","keisoku","setsubi","hinshitsu","zaiko","kanagata","hoju","tenchu"]);
@@ -527,7 +531,10 @@
     // ===== アプリ一覧（セッションの所属部署アプリのみ表示） =====
     function renderApps(sess) {
       $("affName").textContent = affLabel(sess);
-      const keys = (sess.apps || []).filter((k) => APPS[k]); // 未知キーは無視
+      const isPortalAdmin = sess.role === "admin" || sess.canManage === true;
+      const keys = (sess.apps || [])
+        .filter((k) => APPS[k]) // 未知キーは無視
+        .filter((k) => isPortalAdmin || !ADMIN_ONLY_APPS.has(k));
       const tiles = keys.map((k) => {
         const a = APPS[k];
         const el = document.createElement("a");
