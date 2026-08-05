@@ -122,6 +122,6 @@ https://purchasing.paloma-pf.com/#approvals
 | テスト送信で「LINE WORKS が未設定です」 | 表示された環境変数をVercelに設定し再デプロイ |
 | トークン取得に失敗（`invalid_client` 等） | Client ID / Secret / Service Account / Private Key の値。Private Keyの改行が保たれているか |
 | `invalid_scope: Request scope is not valid.` | アプリの OAuth Scope に `bot` が未追加。追加・保存して数分待つ。名前が違う場合は `LINEWORKS_SCOPE` で指定 |
-| 送信でHTTP 403 | アプリのスコープに `bot` があるか。Botが管理者画面で公開されているか |
+| `ACCESS_DENIED: Access is denied for bot.`（403） | 管理者画面（Admin）→ サービス → Bot で、その Bot が**追加・公開**されているか。公開範囲に宛先のメンバーが含まれているか。Bot ID が別アプリの Bot を指していないか（管理者ログイン中に `GET /api/notify` を開くと、このアプリが操作できる Bot 一覧と ID の一致を確認できる） |
 | 送信でHTTP 404 | Bot IDが正しいか。宛先ID（ログインID／メール）がLINE WORKSのメンバーと一致しているか |
 | 届かないがエラーも出ない | 対象ユーザーの `sent:false` 応答（reason）をアプリ側ログで確認 |

@@ -13,7 +13,7 @@
 const crypto = require("crypto");
 const { requireSql, ensureSchema, readBody } = require("../lib/db");
 const { requireManageSession } = require("../lib/portalAuth");
-const { configStatus, sendTextToUser, diagnosePrivateKey, MAX_TEXT_LEN } = require("../lib/lineworks");
+const { configStatus, sendTextToUser, diagnosePrivateKey, diagnoseBot, MAX_TEXT_LEN } = require("../lib/lineworks");
 
 // 通知の見出しに使うアプリ表示名（index.html の APPS / api/contact.js と同じキー）
 const APP_NAMES = {
@@ -62,7 +62,10 @@ module.exports = async (req, res) => {
     if (req.method === "GET") {
       if (!(await requireManageSession(req, res, sql))) return;
       const st = configStatus();
-      res.status(200).json({ configured: st.ok, missing: st.missing, privateKey: diagnosePrivateKey() });
+      const body = { configured: st.ok, missing: st.missing, privateKey: diagnosePrivateKey() };
+      // 設定が揃っているときだけ LINE WORKS へ問い合わせる（Bot の切り分け用）
+      if (st.ok) body.bot = await diagnoseBot();
+      res.status(200).json(body);
       return;
     }
 
