@@ -4,6 +4,7 @@
 // PUT    {id,name?,email?,departmentId?,workplaceId?,role?,approverUserId?,lineworksId?,canManage?,managePassword?} 更新 → 再プロビジョニング
 //        ※ canManage / managePassword の変更はマスターセッションのみ（設定担当者は不可）
 // DELETE {id} 名簿から削除（※各アプリ側のアカウントは削除しない）
+//        ※ ログイン中の本人は削除できない（管理画面に入れなくなるため）
 const { requireSql, ensureSchema, readBody, isUuid } = require("../lib/db");
 const { requireManageSession, hashManagePassword } = require("../lib/portalAuth");
 const { provisionUsers } = require("../lib/provision");
@@ -376,6 +377,14 @@ module.exports = async (req, res) => {
       if (!isUuid(id)) {
         res.status(400).json({ message: "id が不正です" });
         return;
+      }
+      // ログイン中の本人は削除させない（自分の管理権限ごと消えて管理画面に入れなくなるため）
+      if (session.loginId) {
+        const me = await sql`SELECT login_id FROM pf_portal_users WHERE id = ${id} LIMIT 1`;
+        if (me.length > 0 && me[0].login_id === session.loginId) {
+          res.status(400).json({ message: "ログイン中のご自身は削除できません" });
+          return;
+        }
       }
       // FK なしの参照列をアプリ側で NULL 化（承認者・職場管理者に指定されていた場合）
       await sql`UPDATE pf_portal_users SET approver_user_id = NULL WHERE approver_user_id = ${id}`;
