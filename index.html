@@ -256,19 +256,29 @@
     }
     .note .notelink:hover { color: var(--red-deep); }
 
+    /* ===== タブ（アプリ一覧 / 連絡板） ===== */
+    .ptabs { display: flex; gap: 6px; margin: 0 0 20px; border-bottom: 2px solid var(--line); }
+    .ptabs button {
+      background: none; border: none; font-family: inherit; cursor: pointer;
+      font-size: 13.5px; font-weight: 700; color: var(--sub);
+      padding: 11px 16px; border-bottom: 3px solid transparent; margin-bottom: -2px;
+    }
+    .ptabs button.on { color: var(--ink); border-bottom-color: var(--red); }
+    .ptabs .tabbadge {
+      display: inline-block; margin-left: 6px; background: var(--red); color: #fff;
+      font-size: 10px; font-weight: 700; border-radius: 999px; padding: 1px 6px; vertical-align: middle;
+    }
+
     /* ===== 連絡板（業務アプリ全体の連絡網） ===== */
     .board { margin: 0 0 22px; }
-    .board .bhead { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-    .board .bhead h3 { font-size: 14px; font-weight: 700; letter-spacing: .03em; }
-    .board .bcount {
-      font-size: 11px; color: #fff; background: var(--red);
-      border-radius: 999px; padding: 1px 8px; font-weight: 700;
-    }
+    .board .bhead { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .board .bhead .blead { font-size: 12.5px; color: var(--sub); }
     .board .btoggle {
-      margin-left: auto; background: none; border: 1px solid var(--line); border-radius: 999px;
-      font-family: inherit; font-size: 12px; color: var(--sub); padding: 5px 13px; cursor: pointer;
+      margin-left: auto; background: var(--red); border: 1px solid var(--red); border-radius: 999px;
+      font-family: inherit; font-size: 12px; font-weight: 700; color: #fff; padding: 7px 16px; cursor: pointer;
+      white-space: nowrap;
     }
-    .board .btoggle:hover { color: var(--red); border-color: var(--red); }
+    .board .btoggle:hover { background: var(--red-deep); border-color: var(--red-deep); }
     .board .bempty {
       background: #fff; border: 1px solid var(--card-line); border-radius: 14px;
       padding: 18px 20px; font-size: 12.5px; color: var(--sub);
@@ -284,7 +294,14 @@
       font-size: 10.5px; border-radius: 999px; padding: 2px 8px;
       background: var(--soft); color: var(--sub); border: 1px solid var(--line);
     }
-    .nitem .ntag.to { color: var(--red); border-color: #f3c9cb; background: #fdf2f3; }
+    /* 対象アプリのタグはそのアプリを開くリンクにする（連絡から現物へ1クリックで行けるように） */
+    a.ntag.app {
+      text-decoration: none; color: var(--red); border-color: #f3c9cb; background: #fdf2f3;
+      font-weight: 700; transition: background .15s ease, border-color .15s ease;
+    }
+    a.ntag.app:hover { background: var(--red); border-color: var(--red); color: #fff; }
+    a.ntag.app .arrow { margin-left: 3px; }
+    .nitem .ntag.to { color: var(--sub); }
     .nitem .nnew { font-size: 10.5px; font-weight: 700; color: #fff; background: var(--red); border-radius: 999px; padding: 2px 8px; }
     .nitem .nmeta { margin-left: auto; font-size: 11px; color: var(--sub); white-space: nowrap; }
     .nitem .nbody { font-size: 13px; line-height: 1.9; color: #444; white-space: pre-wrap; word-break: break-word; }
@@ -448,41 +465,51 @@
       </div>
     </section>
 
-    <!-- アプリ一覧ビュー -->
+    <!-- アプリ一覧ビュー（アプリ一覧 / 連絡板 のタブ切り替え） -->
     <section id="appsView" class="hidden">
       <div class="sechead">
-        <h2>アプリ一覧</h2>
-        <p>所属：<b id="affName">—</b>　アプリを選ぶと自動でログインします。</p>
+        <h2 id="secTitle">アプリ一覧</h2>
+        <p id="secLead">所属：<b id="affName">—</b>　アプリを選ぶと自動でログインします。</p>
       </div>
+
+      <div class="ptabs">
+        <button type="button" data-ptab="apps" class="on" id="ptabApps">アプリ一覧</button>
+        <button type="button" data-ptab="board" id="ptabBoard">連絡板<span class="tabbadge hidden" id="boardUnread">0</span></button>
+      </div>
+
       <main class="apps">
-        <div class="viewset">
-          <span class="vlabel">表示設定</span>
-          <div class="vtoggle" role="group" aria-label="表示設定">
-            <button type="button" id="viewCard">カード</button>
-            <button type="button" id="viewList">リスト</button>
-          </div>
-        </div>
         <!-- 管理者から回答が届いたときのお知らせ（未読があるときだけ表示） -->
         <div class="note hidden" id="replyNote" style="margin: 0 0 16px; border-color: #1f7a4d; background: #f0fbf5">
           <strong>お問い合わせに回答が届いています</strong>（<span id="replyCount">0</span>件）<br />
           <button type="button" class="notelink" id="openReplies">回答を確認する</button>
         </div>
-        <div class="note hidden" id="noDeptNote" style="margin: 0 0 16px">
-          <strong>表示できるアプリがありません</strong><br />
-          所属部署が設定されていないか、部署にアプリが割り当てられていません。管理者にお問い合わせください。
+
+        <!-- タブ: アプリ一覧 -->
+        <div id="ptabPanelApps">
+          <div class="viewset">
+            <span class="vlabel">表示設定</span>
+            <div class="vtoggle" role="group" aria-label="表示設定">
+              <button type="button" id="viewCard">カード</button>
+              <button type="button" id="viewList">リスト</button>
+            </div>
+          </div>
+          <div class="note hidden" id="noDeptNote" style="margin: 0 0 16px">
+            <strong>表示できるアプリがありません</strong><br />
+            所属部署が設定されていないか、部署にアプリが割り当てられていません。管理者にお問い合わせください。
+          </div>
+          <div class="grid" id="appGrid"></div>
         </div>
 
-        <!-- 連絡板：業務アプリ全体の連絡網。投稿すると宛先へLINE WORKSで通知する -->
-        <section class="board hidden" id="board">
-          <div class="bhead">
-            <h3>連絡板</h3>
-            <span class="bcount hidden" id="boardUnread">0</span>
-            <button type="button" class="btoggle hidden" id="boardPostBtn">連絡を投稿</button>
-          </div>
-          <div id="boardList"></div>
-        </section>
-
-        <div class="grid" id="appGrid"></div>
+        <!-- タブ: 連絡板（業務アプリ全体の連絡網。投稿すると宛先へLINE WORKSで通知する） -->
+        <div id="ptabPanelBoard" class="hidden">
+          <section class="board" id="board">
+            <div class="bhead">
+              <span class="blead">業務アプリに関する連絡です。投稿すると宛先へLINE WORKSで通知されます。</span>
+              <button type="button" class="btoggle hidden" id="boardPostBtn">連絡を投稿</button>
+            </div>
+            <div id="boardList"></div>
+          </section>
+        </div>
         <div class="note">
           <strong>ご利用にあたって</strong><br />
           各アプリはポータルから<strong>自動でログイン</strong>されます（図面管理を除く）。うまく開けない場合や不明な点は、<button type="button" class="notelink" id="openContact">お問い合わせフォーム</button>からご連絡ください。<br />
@@ -598,6 +625,23 @@
     // 設定担当者（can_manage）以外のタイルには出さない。
     // ※ 表示を絞るだけでは防御にならないので、起動側（api/user.js）でも同じ条件で弾いている。
     const ADMIN_ONLY_APPS = new Set(["jinji", "operation"]);
+
+    // アプリを開くURL。SSO対応アプリはポータル経由で自動ログインし、
+    // 非対応（zumen: 端末内アプリ）は直接開く。タイルと連絡板の両方から使う。
+    function appHref(key) {
+      const a = APPS[key];
+      if (!a) return null;
+      return SSO_APPS.has(key) ? "/api/user?launch=" + encodeURIComponent(key) : a.url;
+    }
+
+    // そのユーザーがこのアプリを開けるか（タイルに出す条件と同じ）。
+    // 管理者専用アプリは起動側（api/user.js）でも弾かれるため、開けないものはリンクにしない。
+    function canOpenApp(key, sess) {
+      if (!APPS[key] || !sess) return false;
+      if (!(sess.apps || []).includes(key)) return false;
+      const isPortalAdmin = sess.role === "admin" || sess.canManage === true;
+      return isPortalAdmin || !ADMIN_ONLY_APPS.has(key);
+    }
     // サンプル事例（デモ）を表示できるアプリ。<app>/login?demo=1 でサンプルデータ入りのデモが直接開く。
     // nippou(生産日報) はデモ機能なし、zumen は端末内アプリのため対象外。
     const DEMO_APPS = new Set(["keikaku","sekisai","keisoku","setsubi","hinshitsu","zaiko","kanagata","hoju","tenchu"]);
@@ -631,15 +675,13 @@
     // ===== アプリ一覧（セッションの所属部署アプリのみ表示） =====
     function renderApps(sess) {
       $("affName").textContent = affLabel(sess);
-      const isPortalAdmin = sess.role === "admin" || sess.canManage === true;
-      const keys = (sess.apps || [])
-        .filter((k) => APPS[k]) // 未知キーは無視
-        .filter((k) => isPortalAdmin || !ADMIN_ONLY_APPS.has(k));
+      // 表示条件は canOpenApp に集約する（連絡板のアプリリンクと判定がずれないように）
+      const keys = (sess.apps || []).filter((k) => canOpenApp(k, sess));
       const tiles = keys.map((k) => {
         const a = APPS[k];
         const el = document.createElement("a");
         el.className = "tile";
-        el.href = SSO_APPS.has(k) ? "/api/user?launch=" + encodeURIComponent(k) : a.url;
+        el.href = appHref(k);
         el.dataset.app = k;
         el.innerHTML =
           // アイコン未配置のアプリでも「壊れた画像」を出さず、無地のタイルで表示する
@@ -678,6 +720,21 @@
       openPendingContact();
     }
 
+    // ===== タブ（アプリ一覧 / 連絡板） =====
+    // 見出しもタブに合わせて変える（今どちらを見ているかが分かるように）。
+    function switchTab(name) {
+      const isBoard = name === "board";
+      $("ptabApps").classList.toggle("on", !isBoard);
+      $("ptabBoard").classList.toggle("on", isBoard);
+      $("ptabPanelApps").classList.toggle("hidden", isBoard);
+      $("ptabPanelBoard").classList.toggle("hidden", !isBoard);
+      $("secTitle").textContent = isBoard ? "連絡板" : "アプリ一覧";
+      $("secLead").classList.toggle("hidden", isBoard);
+    }
+    document.querySelectorAll(".ptabs button[data-ptab]").forEach((b) => {
+      b.addEventListener("click", () => switchTab(b.dataset.ptab));
+    });
+
     // ===== 連絡板（業務アプリ全体の連絡網） =====
     // 一覧・返信・既読は /api/notices。投稿は管理者のみ（サーバー側でも判定する）。
     let notices = [];
@@ -714,19 +771,20 @@
     }
 
     function renderNotices() {
-      const board = $("board");
-      // 連絡が1件も無く、投稿もできない人には何も出さない（空の枠を見せない）
-      if (notices.length === 0 && !canPostNotice) { board.classList.add("hidden"); return; }
-      board.classList.remove("hidden");
       $("boardPostBtn").classList.toggle("hidden", !canPostNotice);
 
+      // 未読はタブのバッジで知らせる（連絡板を開いていなくても気付けるように）
       const unread = notices.filter((n) => !n.isRead).length;
       $("boardUnread").textContent = String(unread);
       $("boardUnread").classList.toggle("hidden", unread === 0);
 
       const list = $("boardList");
       if (notices.length === 0) {
-        list.innerHTML = '<div class="bempty">まだ連絡はありません。「連絡を投稿」から現場へ展開できます。</div>';
+        list.innerHTML = '<div class="bempty">'
+          + (canPostNotice
+              ? 'まだ連絡はありません。「連絡を投稿」から現場へ展開できます。'
+              : 'まだ連絡はありません。')
+          + "</div>";
         return;
       }
       list.replaceChildren(...notices.map(noticeEl));
@@ -734,13 +792,17 @@
 
     function noticeEl(n) {
       const open = openNotices.has(n.id);
+      // 対象アプリが分かっていて、自分が開けるアプリならリンクにする
+      // （開けない人がタグを押しても起動できないので、その場合はただの表示にする）
+      const usable = n.app && canOpenApp(n.app, CURRENT_SESS);
+      const href = usable ? appHref(n.app) : null;
       const el = document.createElement("article");
       el.className = "nitem" + (n.isRead ? "" : " unread");
       el.innerHTML =
         '<div class="ntop">' +
           (n.isRead ? "" : '<span class="nnew">新着</span>') +
           '<span class="ntitle"></span>' +
-          '<span class="ntag"></span>' +
+          (usable ? '<a class="ntag app"></a>' : '<span class="ntag"></span>') +
           '<span class="ntag to"></span>' +
           '<span class="nmeta"></span>' +
         "</div>" +
@@ -751,7 +813,18 @@
           (n.canDelete ? '<button type="button" class="nlink bdel">削除</button>' : "") +
         "</div>";
       el.querySelector(".ntitle").textContent = n.title;
-      el.querySelector(".ntag").textContent = n.appName;
+      const tag = el.querySelector(".ntag");
+      if (usable) {
+        tag.href = href;
+        tag.title = n.appName + "を開く";
+        tag.textContent = n.appName;
+        const arrow = document.createElement("span");
+        arrow.className = "arrow";
+        arrow.textContent = "›";
+        tag.appendChild(arrow);
+      } else {
+        tag.textContent = n.appName;
+      }
       el.querySelector(".ntag.to").textContent = "宛先: " + n.audienceName;
       el.querySelector(".nmeta").textContent = n.createdByName + "　" + fmtDt(n.createdAt);
       el.querySelector(".btoggleBody").textContent = open ? "閉じる" : "内容を見る";
