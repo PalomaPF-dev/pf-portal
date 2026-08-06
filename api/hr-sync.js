@@ -11,7 +11,9 @@
 //                        （同名の既存があればそれを使い、無いものだけ新規作成）
 //   2. 人事情報の更新   … 所属・役職・職務・生年月日・入社日・雇用体系・在籍状態
 //   3. 承認者の設定    … managerLoginId をポータルの approver_user_id に反映
-//   4. アカウント発行   … createMissing:true のとき、未登録の社員をパスワード未設定で作る
+//   4. 職場の長の設定   … 職場の adminLoginId をポータルの admin_user_id に反映
+//                        （兼任＝別の職場に所属する管理者もそのまま設定する）
+//   5. アカウント発行   … createMissing:true のとき、未登録の社員をパスワード未設定で作る
 //
 // 所属が変わった在籍者だけ、既存の provisionUsers() で各業務アプリへ再連携する。
 const crypto = require("crypto");
@@ -531,6 +533,43 @@ module.exports = async (req, res) => {
         if (r) r.approverSet = true;
       }
     }
+
+    // ===== 職場の長（承認者となる管理者）の反映 =====
+    // 職場の adminLoginId を pf_portal_workplaces.admin_user_id に入れる。
+    // 人事マスタでは管理者が別の職場に所属していること（兼任）があるため、
+    // 「その職場に所属していること」は条件にしない。role / can_manage には触れない。
+    let workplaceAdminSet = 0;
+    {
+      const wanted = [];
+      for (const o of organizations) {
+        if (o?.kind !== "workplace") continue;
+        const code = nz(o.code);
+        const admin = nz(o.adminLoginId);
+        if (!code || !admin || !LOGIN_ID_RE.test(admin)) continue;
+        const w = wpByAnyCode.get(code);
+        if (w) wanted.push({ wpId: w.id, loginId: admin });
+      }
+      if (wanted.length > 0) {
+        const ids = [...new Set(wanted.map((x) => x.loginId))];
+        const rows = await sql`
+          SELECT id, login_id FROM pf_portal_users WHERE login_id = ANY(${ids})`;
+        const idByLogin = new Map(rows.map((r) => [r.login_id, r.id]));
+        const pairs = wanted
+          .map((x) => ({ wpId: x.wpId, userId: idByLogin.get(x.loginId) }))
+          .filter((x) => x.userId);
+        const CHUNK_W = 500;
+        for (let at = 0; at < pairs.length; at += CHUNK_W) {
+          const part = pairs.slice(at, at + CHUNK_W);
+          const done = await sql`
+            UPDATE pf_portal_workplaces w SET admin_user_id = v.uid
+            FROM unnest(${part.map((x) => x.wpId)}::uuid[], ${part.map((x) => x.userId)}::uuid[]) AS v(wid, uid)
+            WHERE w.id = v.wid AND w.admin_user_id IS DISTINCT FROM v.uid
+            RETURNING w.id`;
+          workplaceAdminSet += done.length;
+        }
+      }
+    }
+    orgStats.adminSet = workplaceAdminSet;
 
     if (needsReprovision.length > 0) {
       // 失敗しても連携全体は成功として返す（アプリ側の一時障害で人事情報の更新まで
