@@ -92,6 +92,85 @@ Content-Type: application/json
 https://purchasing.paloma-pf.com/#approvals
 ```
 
+### 承認依頼の通知（推奨）
+
+**申請が発生したときは、これを使ってください。**アプリは「誰の申請か」を渡すだけで、
+**通知先はポータルが決めます**（アプリ側で承認者を持つ必要がありません）。
+
+```
+POST https://portal.paloma-pf.com/api/notify
+
+{
+  "key":         "<PF_PROVISION_KEY>",
+  "approvalFor": "12345",              // 申請者の社員番号（必須）
+  "app":         "purchasing",         // 任意: アプリキー
+  "url":         "https://purchasing.paloma-pf.com/#approvals",  // 任意
+  "title":       "承認依頼",            // 任意（既定「承認依頼」）
+  "message":     "..."                 // 任意（省略時は申請者名から自動生成）
+}
+```
+
+届くメッセージ（`message` 省略時）:
+
+```
+【購買単価】承認依頼
+
+申請者 花子 さんから購買単価の承認申請が届いています。
+
+▼確認はこちら
+https://purchasing.paloma-pf.com/#approvals
+```
+
+**通知先の決まり方**（LINE WORKS の宛先を持つ人が見つかるまで順に下る）:
+
+| 順 | 通知先 | `via` |
+| --- | --- | --- |
+| 1 | 申請者に指定された**承認者** | `approver` |
+| 2 | 申請者の**職場の管理者**（職場マスターで指定） | `workplace-admin` |
+| 3 | その**職場に所属する管理者**（社員番号順） | `workplace-member-admin` |
+| 4 | 申請者の**所属部署の管理者**（該当者全員・最大20名） | `department-admin` |
+
+1〜3 は承認する人なので、宛先を持つ人が1人見つかった時点で確定します。
+誰も LINE WORKS を設定していなければ 4 に回ります（LINE WORKS が工場長クラスにしか
+入っていない運用でも、部署の誰かには届くようにするため）。
+
+レスポンス例:
+
+```json
+{"ok": true, "sent": true, "sentCount": 1,
+ "results": [{"loginId": "20001", "sent": true, "via": "approver"}]}
+```
+
+該当者が誰も LINE WORKS もメールも登録していない場合は
+`{"ok":true, "sent":false, "reason":"no-approver-destination"}` を返します
+（**200 なので、アプリ側の申請処理は止めないでください**）。
+
+#### 各アプリへの組み込み
+
+申請を保存した直後に、この1関数を呼ぶだけです。**通知の失敗で申請を失敗させない**よう、
+待たずに投げっぱなしにします（await して例外を上げると、通知不能で申請が通らなくなります）。
+
+```js
+/** 申請の登録後に承認者へLINE WORKS通知を送る（失敗しても申請は成立させる）。 */
+function notifyApproval(applicantLoginId, url) {
+  const key = process.env.PF_PROVISION_KEY;
+  if (!key) return;
+  fetch("https://portal.paloma-pf.com/api/notify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      key,
+      approvalFor: applicantLoginId,
+      app: "purchasing",   // 自アプリのキー
+      url,
+    }),
+  }).catch((e) => console.error("[notify] 承認通知に失敗:", e && e.message));
+}
+```
+
+`PF_PROVISION_KEY` は既に各アプリの環境変数に入っています（SSO で使用中）。
+追加の設定は要りません。
+
 ### 関係者へ一斉通知（複数宛て）
 
 `loginId` の代わりに `loginIds`（配列・最大100名）を渡すと、関係者へまとめて送れます。
