@@ -1110,7 +1110,7 @@
         bd.className = "mini danger"; bd.type = "button"; bd.textContent = "削除";
         bd.style.cssText = "padding:1px 6px;font-size:10.5px;";
         bd.addEventListener("click", async () => {
-          if (!confirm("職場「" + w.name + "」を削除しますか？\n所属していたユーザーの職場は未設定になります。")) return;
+          if (!confirm("職場「" + w.name + "」を削除しますか？\n所属していたユーザーは部付け（職場なし）になります。")) return;
           const msg = $("deptMsg");
           msg.classList.add("hidden");
           try {
@@ -1231,7 +1231,8 @@
       const deptId = $("ufDept").value;
       const o0 = document.createElement("option");
       o0.value = "";
-      o0.textContent = "（未設定）";
+      // 職場を選ばない＝部付け（部署直属）。一覧でも各部署の先頭にまとめて表示する
+      o0.textContent = "部付け（職場なし）";
       const opts = [o0];
       for (const w of workplaces.filter((w) => w.departmentId === deptId)) {
         const o = document.createElement("option");
@@ -1493,7 +1494,8 @@
               key: wkey,
               id: u.workplaceId || null,
               code: u.workplaceCode || "",
-              name: u.workplaceId ? (u.workplaceName || u.workplaceCode || "") : "職場未設定",
+              // 職場の所属がない＝部付け（部署直属）
+              name: u.workplaceId ? (u.workplaceName || u.workplaceCode || "") : "部付け",
               users: [],
             });
           }
@@ -1501,9 +1503,10 @@
         }
         // 職場のあるユーザーがいない部署は小見出しを出さない（従来どおりの一覧）
         const useWpHeads = wgroups.size > 1 || !wgroups.has("__none__");
+        // 部付け（職場なし）は部署直属のため各部署の先頭に置き、以降は職場コード順
         const orderedWps = Array.from(wgroups.values()).sort((a, b) => {
-          if (a.key === "__none__") return 1;
-          if (b.key === "__none__") return -1;
+          if (a.key === "__none__") return -1;
+          if (b.key === "__none__") return 1;
           return cmpJa(a.code || a.name, b.code || b.name);
         });
 
@@ -1548,7 +1551,7 @@
               '<td><button type="button" class="ulink">' + esc(u.name) + "</button></td>" +
               "<td>" + roleBadgeHtml(u) + "</td>" +
               "<td>" + esc((u.departmentCode ? u.departmentCode + " " : "") + (u.departmentName || "未設定")) + "</td>" +
-              "<td>" + (u.workplaceId ? esc(u.workplaceName || u.workplaceCode || "") : '<span class="sub">—</span>') + "</td>" +
+              "<td>" + (u.workplaceId ? esc(u.workplaceName || u.workplaceCode || "") : '<span class="sub">部付け</span>') + "</td>" +
               '<td style="white-space:nowrap"></td>';
             tr.querySelector(".ulink").addEventListener("click", () => openUserDetail(u));
             const cell = tr.lastElementChild;
@@ -1579,7 +1582,7 @@
         '<div class="sub" style="min-width:96px;font-size:12px">' + label + "</div><div style=\"flex:1\">" + html + "</div></div>";
       const wp = u.workplaceId
         ? esc((u.workplaceCode ? u.workplaceCode + " " : "") + (u.workplaceName || ""))
-        : '<span class="sub">未設定</span>';
+        : '<span class="sub">部付け（職場なし）</span>';
       $("umBody").innerHTML =
         row("部署", esc((u.departmentCode ? u.departmentCode + " " : "") + (u.departmentName || "未設定"))) +
         row("職場", wp) +
