@@ -46,6 +46,56 @@ const nzDate = (v) => {
   return s && DATE_RE.test(s) ? s : null;
 };
 
+/**
+ * 人事管理の社員台帳に居ない人を、ポータルの名簿から消す。
+ *
+ * prune = { keepLoginIds: [...全員ぶんの社員番号], confirm?: true }
+ * confirm が無ければ**下見だけ**返す（何も消さない）。
+ *
+ * 必ず残すもの:
+ *   - ポータル管理者（can_manage = true）。人事の台帳に載らない管理用の
+ *     アカウント（統一管理者など）がここに含まれるため、消すと管理画面が
+ *     操作できなくなる。
+ *
+ * keepLoginIds が空のときは何もしない（送信の失敗で名簿が全部消えるのを防ぐ）。
+ */
+async function prunePortalUsers(sql, prune) {
+  const keepLoginIds = Array.isArray(prune.keepLoginIds)
+    ? [...new Set(prune.keepLoginIds.map((v) => String(v || "").trim()).filter((v) => LOGIN_ID_RE.test(v)))]
+    : [];
+  if (keepLoginIds.length === 0) {
+    return { ok: false, message: "社員番号が1件も届かなかったため、何もしませんでした。", deleted: 0, users: 0, list: [] };
+  }
+
+  const targets = await sql`
+    SELECT u.id, u.login_id, u.name, u.role, d.name AS department_name
+    FROM pf_portal_users u
+    LEFT JOIN pf_portal_departments d ON d.id = u.department_id
+    WHERE u.can_manage IS NOT TRUE
+      AND NOT (u.login_id = ANY(${keepLoginIds}::text[]))
+    ORDER BY u.login_id ASC`;
+
+  const preview = {
+    ok: true,
+    users: targets.length,
+    list: targets.slice(0, 200).map((t) => ({
+      loginId: t.login_id,
+      name: t.name,
+      role: t.role,
+      departmentName: t.department_name,
+    })),
+  };
+  if (prune.confirm !== true) return { ...preview, dryRun: true, deleted: 0 };
+  if (targets.length === 0) return { ...preview, dryRun: false, deleted: 0 };
+
+  const ids = targets.map((t) => t.id);
+  // FK なしの参照列をアプリ側で NULL 化（承認者・職場管理者に指定されていた場合）
+  await sql`UPDATE pf_portal_users SET approver_user_id = NULL WHERE approver_user_id = ANY(${ids}::uuid[])`;
+  await sql`UPDATE pf_portal_workplaces SET admin_user_id = NULL WHERE admin_user_id = ANY(${ids}::uuid[])`;
+  const deleted = await sql`DELETE FROM pf_portal_users WHERE id = ANY(${ids}::uuid[]) RETURNING id`;
+  return { ...preview, dryRun: false, deleted: deleted.length };
+}
+
 module.exports = async (req, res) => {
   if (req.method !== "POST") {
     res.status(405).json({ message: "Method not allowed" });
@@ -67,7 +117,8 @@ module.exports = async (req, res) => {
   // 古い人事管理は organizations も送ってくる。エラーにはせず、受け取らなかったと返す。
   const ignoredOrganizations = Array.isArray(body.organizations) ? body.organizations.length : 0;
   const createMissing = body.createMissing === true;
-  if (employees.length === 0) {
+  const prune = body.prune && typeof body.prune === "object" ? body.prune : null;
+  if (employees.length === 0 && !prune) {
     res.status(400).json({ message: "employees を指定してください" });
     return;
   }
@@ -81,6 +132,16 @@ module.exports = async (req, res) => {
 
   try {
     await ensureSchema(sql);
+
+    // ===== 人事管理に居ない人を消す（一斉更新の仕上げ）=====
+    // 社員は分けて送られてくるので、削除は「全員ぶんの社員番号」を持った
+    // 最後の1回でだけ行う。ここで消さないと、ポータルだけに残った人が
+    // いつまでもアプリを使えてしまう。
+    if (prune) {
+      const r = await prunePortalUsers(sql, prune);
+      res.status(200).json({ results: [], prune: r });
+      return;
+    }
 
     const results = [];
 

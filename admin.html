@@ -566,6 +566,16 @@
           </table>
         </div>
         <div class="msg err hidden" id="usersMsg"></div>
+        <div class="note" style="border-color:#e6cccc;background:#fdf7f7">
+          <strong>名簿をやり直す</strong>：<span class="badge b-manage">ポータル管理</span>のユーザーとログイン中のご自身を除いて、
+          <strong>名簿のユーザーをすべて削除</strong>します。部署・職場は消えません。
+          <strong>各アプリ側のアカウントも消えません</strong>（アプリ側の削除は各アプリの管理機能で行ってください）。
+          <div style="margin-top:6px">
+            <button class="mini" id="userResetPreview" type="button">消える件数を確認</button>
+            <button class="mini danger" id="userResetRun" type="button" style="margin-left:6px" disabled>削除を実行</button>
+            <span class="sub" id="userResetInfo" style="margin-left:8px"></span>
+          </div>
+        </div>
         <div class="note">
           発行状況: <span class="badge b-created">連携済み</span>=アプリにアカウント連携済み（ポータルから自動ログイン可） / <span class="badge b-error">エラー</span>=連携失敗（「状況更新」で再連携。解消しない場合はアプリの更新状況を確認）。アプリ個別のパスワード設定は不要です（ポータルで一括ログイン）。<br />
           承認者を指定しない一般ユーザーは、所属する職場の管理者（職場に管理者を指定していない場合は、<strong>その職場に所属する管理者権限のユーザー</strong>）が承認者になります。管理者にも承認者を指定できます（管理者本人の申請を上位者へ回す場合）。承認者の変更は各アプリへ自動で連携されます。<br />
@@ -1202,6 +1212,50 @@
     // 定義のすぐ後で呼ぶ。上（部署フォームの束ね）で呼ぶと DEPT_RESET_KEEP の
     // 初期化前になり、参照した瞬間に script 全体が落ちて管理画面が真っ白になる。
     bindDeptReset();
+
+    // ===== ②-0 名簿のやり直し（ユーザーの一括削除）=====
+    // 部署と同じく「確認 → 実行」の2段。ポータル管理者とログイン中の本人は
+    // サーバー側でも必ず残す（名簿を直せる人が居なくなるのを防ぐため）。
+    function bindUserReset() {
+      const info = $("userResetInfo");
+      const run = $("userResetRun");
+      const call = (confirm) =>
+        api("/api/users-reset", {
+          method: "POST",
+          body: JSON.stringify(confirm ? { confirm: "削除" } : {}),
+        });
+      $("userResetPreview").addEventListener("click", async () => {
+        const msg = $("usersMsg");
+        msg.classList.add("hidden");
+        try {
+          const r = await call(false);
+          info.textContent = r.users + " 名が消え、" + r.keptUsers + " 名が残ります。";
+          run.disabled = r.users === 0;
+        } catch (e) {
+          msg.textContent = e.message;
+          msg.classList.remove("hidden");
+        }
+      });
+      run.addEventListener("click", async () => {
+        if (!window.confirm(
+          "ポータル管理のユーザーとログイン中のご自身を除いて、名簿のユーザーをすべて削除します。\n" +
+          "※各アプリ側のアカウントは削除されません。\n実行しますか？"
+        )) return;
+        const msg = $("usersMsg");
+        msg.classList.add("hidden");
+        run.disabled = true;
+        try {
+          const r = await call(true);
+          info.textContent = r.deleted + " 名を削除しました。";
+          await reloadAll();
+        } catch (e) {
+          msg.textContent = e.message;
+          msg.classList.remove("hidden");
+          run.disabled = false;
+        }
+      });
+    }
+    bindUserReset();
 
     // ===== ①-2 職場（部署配下）フォーム =====
     let editingWorkplaceId = null;
