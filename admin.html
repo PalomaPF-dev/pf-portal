@@ -90,7 +90,10 @@
       white-space: nowrap;
     }
     button.mini:hover { border-color: var(--red); color: var(--red); }
-    button.mini.danger:hover { border-color: var(--red); color: var(--red); }
+    button.mini.danger { color: var(--red); }
+    button.mini.danger:hover { border-color: var(--red); background: #fdf2f2; }
+    button.mini:disabled { color: #b9b9b9; border-color: var(--line); cursor: not-allowed; background: #fafafa; }
+    button.mini:disabled:hover { border-color: var(--line); color: #b9b9b9; background: #fafafa; }
 
     .msg { font-size: 12px; margin-top: 10px; line-height: 1.7; }
     .msg.err { color: var(--red); }
@@ -695,6 +698,8 @@
     let users = [];
     // 現在のセッション種別: 'master'（マスターパスワード） | 'manager'（ポータル管理権限ユーザー）
     let sessionKind = "master";
+    // manager セッションでログインしている本人の社員番号（自分自身を削除させないために使う）
+    let sessionLoginId = null;
 
     // 管理者権限のユーザー（承認者・職場管理者の選択肢）
     function adminUsers() {
@@ -728,6 +733,7 @@
       try {
         const s = await api("/api/admin-session");
         sessionKind = (s && s.kind) || "master";
+        sessionLoginId = (s && s.loginId) || null;
         showAdmin();
         await reloadAll();
       } catch {
@@ -776,6 +782,7 @@
           body: JSON.stringify({ password: $("loginPw").value, loginId: $("loginId").value.trim() }),
         });
         sessionKind = (r && r.kind) || "master";
+        sessionLoginId = (r && r.loginId) || null;
         $("loginPw").value = "";
         showAdmin();
         await reloadAll();
@@ -1110,7 +1117,7 @@
         bd.className = "mini danger"; bd.type = "button"; bd.textContent = "削除";
         bd.style.cssText = "padding:1px 6px;font-size:10.5px;";
         bd.addEventListener("click", async () => {
-          if (!confirm("職場「" + w.name + "」を削除しますか？\n所属していたユーザーの職場は未設定になります。")) return;
+          if (!confirm("職場「" + w.name + "」を削除しますか？\n所属していたユーザーは部付け（職場なし）になります。")) return;
           const msg = $("deptMsg");
           msg.classList.add("hidden");
           try {
@@ -1231,7 +1238,8 @@
       const deptId = $("ufDept").value;
       const o0 = document.createElement("option");
       o0.value = "";
-      o0.textContent = "（未設定）";
+      // 職場を選ばない＝部付け（部署直属）。一覧でも各部署の先頭にまとめて表示する
+      o0.textContent = "部付け（職場なし）";
       const opts = [o0];
       for (const w of workplaces.filter((w) => w.departmentId === deptId)) {
         const o = document.createElement("option");
@@ -1493,7 +1501,8 @@
               key: wkey,
               id: u.workplaceId || null,
               code: u.workplaceCode || "",
-              name: u.workplaceId ? (u.workplaceName || u.workplaceCode || "") : "職場未設定",
+              // 職場の所属がない＝部付け（部署直属）
+              name: u.workplaceId ? (u.workplaceName || u.workplaceCode || "") : "部付け",
               users: [],
             });
           }
@@ -1501,9 +1510,10 @@
         }
         // 職場のあるユーザーがいない部署は小見出しを出さない（従来どおりの一覧）
         const useWpHeads = wgroups.size > 1 || !wgroups.has("__none__");
+        // 部付け（職場なし）は部署直属のため各部署の先頭に置き、以降は職場コード順
         const orderedWps = Array.from(wgroups.values()).sort((a, b) => {
-          if (a.key === "__none__") return 1;
-          if (b.key === "__none__") return -1;
+          if (a.key === "__none__") return -1;
+          if (b.key === "__none__") return 1;
           return cmpJa(a.code || a.name, b.code || b.name);
         });
 
@@ -1548,7 +1558,7 @@
               '<td><button type="button" class="ulink">' + esc(u.name) + "</button></td>" +
               "<td>" + roleBadgeHtml(u) + "</td>" +
               "<td>" + esc((u.departmentCode ? u.departmentCode + " " : "") + (u.departmentName || "未設定")) + "</td>" +
-              "<td>" + (u.workplaceId ? esc(u.workplaceName || u.workplaceCode || "") : '<span class="sub">—</span>') + "</td>" +
+              "<td>" + (u.workplaceId ? esc(u.workplaceName || u.workplaceCode || "") : '<span class="sub">部付け</span>') + "</td>" +
               '<td style="white-space:nowrap"></td>';
             tr.querySelector(".ulink").addEventListener("click", () => openUserDetail(u));
             const cell = tr.lastElementChild;
@@ -1559,8 +1569,27 @@
             bi.className = "mini"; bi.type = "button"; bi.textContent = "詳細";
             bi.style.marginLeft = "6px";
             bi.addEventListener("click", () => openUserDetail(u));
+            // 1名ずつの削除。ログイン中の本人だけは押せない（管理画面に入れなくなるため）
+            const bd = document.createElement("button");
+            bd.className = "mini danger"; bd.type = "button"; bd.textContent = "削除";
+            bd.style.marginLeft = "6px";
+            const isSelf = Boolean(sessionLoginId) && u.loginId === sessionLoginId;
+            bd.disabled = isSelf;
+            if (isSelf) bd.title = "ログイン中のご自身は削除できません";
+            bd.addEventListener("click", async () => {
+              const msg = $("usersMsg");
+              msg.classList.add("hidden");
+              bd.disabled = true;
+              const done = await deleteUser(u, (m) => {
+                msg.textContent = m;
+                msg.classList.remove("hidden");
+              });
+              // 削除できたときは一覧が作り直されるので、失敗したときだけ押せる状態へ戻す
+              if (!done) bd.disabled = false;
+            });
             cell.appendChild(be);
             cell.appendChild(bi);
+            cell.appendChild(bd);
             rows.push(tr);
           }
         }
@@ -1579,7 +1608,7 @@
         '<div class="sub" style="min-width:96px;font-size:12px">' + label + "</div><div style=\"flex:1\">" + html + "</div></div>";
       const wp = u.workplaceId
         ? esc((u.workplaceCode ? u.workplaceCode + " " : "") + (u.workplaceName || ""))
-        : '<span class="sub">未設定</span>';
+        : '<span class="sub">部付け（職場なし）</span>';
       $("umBody").innerHTML =
         row("部署", esc((u.departmentCode ? u.departmentCode + " " : "") + (u.departmentName || "未設定"))) +
         row("職場", wp) +
@@ -1619,6 +1648,35 @@
       return dest + ' <button type="button" class="mini" id="umLwTest" style="margin-left:8px">テスト送信</button>';
     }
     function closeUserDetail() { $("userModal").classList.add("hidden"); detailUser = null; }
+
+    /**
+     * ユーザーを1名削除する（一覧の削除ボタン・詳細モーダルの両方から使う）。
+     * ログイン中の本人は削除できない（管理画面に入れなくなるため。サーバー側でも拒否する）。
+     * showError: 画面ごとのエラー表示（一覧なら usersMsg、モーダルならモーダル内）
+     */
+    async function deleteUser(u, showError) {
+      if (!u) return false;
+      if (sessionLoginId && u.loginId === sessionLoginId) {
+        showError("ログイン中のご自身は削除できません");
+        return false;
+      }
+      const where = (u.departmentName || "所属未設定") + (u.workplaceName ? " › " + u.workplaceName : "");
+      if (!confirm(
+        "「" + u.name + "（" + u.loginId + "）」を名簿から削除しますか？\n" +
+        "所属: " + where + "\n\n" +
+        "※各アプリ側のアカウントは削除されません。"
+      )) return false;
+      try {
+        await api("/api/users", { method: "DELETE", body: JSON.stringify({ id: u.id }) });
+        if (editingUserId === u.id) cancelEditUser();
+        if (detailUser && detailUser.id === u.id) closeUserDetail();
+        await reloadAll();
+        return true;
+      } catch (e) {
+        showError(e.message);
+        return false;
+      }
+    }
     $("umClose").addEventListener("click", closeUserDetail);
     $("userModal").addEventListener("click", (e) => { if (e.target === $("userModal")) closeUserDetail(); });
     document.addEventListener("keydown", (e) => {
@@ -1648,18 +1706,8 @@
         b.textContent = "状況更新";
       }
     });
-    $("umDelete").addEventListener("click", async () => {
-      const u = detailUser;
-      if (!u) return;
-      if (!confirm("「" + u.name + "（" + u.loginId + "）」を名簿から削除しますか？\n※各アプリ側のアカウントは削除されません。")) return;
-      try {
-        await api("/api/users", { method: "DELETE", body: JSON.stringify({ id: u.id }) });
-        if (editingUserId === u.id) cancelEditUser();
-        closeUserDetail();
-        await reloadAll();
-      } catch (e) {
-        $("umBody").insertAdjacentHTML("afterbegin", '<div class="msg err">' + esc(e.message) + "</div>");
-      }
+    $("umDelete").addEventListener("click", () => {
+      if (detailUser) deleteUser(detailUser, (m) => $("umBody").insertAdjacentHTML("afterbegin", '<div class="msg err">' + esc(m) + "</div>"));
     });
     ["uSearch", "uDeptFilter", "uSort"].forEach((id) => {
       $(id).addEventListener(id === "uSearch" ? "input" : "change", renderUserTable);
