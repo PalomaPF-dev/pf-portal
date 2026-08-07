@@ -244,6 +244,10 @@ module.exports = async (req, res) => {
         wpId,
         affiliationChanged: !u || deptId !== u.department_id || wpId !== u.workplace_id,
         managerLoginId: manager && manager !== loginId ? manager : null,
+        // 誰かの承認者になっている人。ポータルでは承認者に管理者権限が要る
+        // （api/users.js は管理者権限のユーザーしか承認者に指定させない）ため、
+        // 人事が承認者と決めた人には管理者権限を付ける。
+        isApprover: e.isApprover === true && !retired,
         isNew: !u,
         retired,
       });
@@ -280,6 +284,24 @@ module.exports = async (req, res) => {
     }
     const affiliationCleared = upserts.filter((x) => x.retired && x.affiliationChanged).length;
     affiliationSet = upserts.filter((x) => !x.retired && x.affiliationChanged && x.deptId).length;
+
+    // ===== 承認者になっている人に管理者権限を付ける =====
+    // 付けるだけで、外しはしない。ポータル側の判断で管理者にしている人が
+    // 居るため、人事が承認者と見なさなくなった＝一般に落とす、とはしない。
+    // ポータル管理（can_manage）には触れない。
+    let adminGranted = 0;
+    const toAdmin = upserts
+      .filter((x) => x.isApprover)
+      .map((x) => idByLoginId.get(x.loginId))
+      .filter(Boolean);
+    for (let at = 0; at < toAdmin.length; at += CHUNK) {
+      const part = toAdmin.slice(at, at + CHUNK);
+      const done = await sql`
+        UPDATE pf_portal_users SET role = 'admin'
+        WHERE id = ANY(${part}::uuid[]) AND role IS DISTINCT FROM 'admin'
+        RETURNING id`;
+      adminGranted += done.length;
+    }
 
     // ===== 承認者の反映 =====
     // 全員の行が揃ってから引く（承認者本人が同じ連携で作られていることがあるため）。
@@ -342,6 +364,7 @@ module.exports = async (req, res) => {
       },
       affiliationCleared,
       affiliationSet,
+      adminGranted,
       // ポータルに無かったコード。部署CSV・職場CSVの取込漏れに気づけるように返す
       unknownDepartmentCodes: [...unknownDeptCodes].slice(0, 50),
       unknownWorkplaceCodes: [...unknownWorkplaceCodes].slice(0, 50),
