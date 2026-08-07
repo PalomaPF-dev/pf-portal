@@ -145,6 +145,27 @@ module.exports = async (req, res) => {
 
     const results = [];
 
+    // ===== 部署・職場の対応表 =====
+    // 人事から届くのは**コードだけ**。ポータルに同じコードの部署・職場が
+    // あるときだけ引き当てる（部署・職場そのものは作らない）。
+    // ポータルの code（D001 等）と、人事側のコードを入れる hr_code の
+    // どちらでも引けるようにする。
+    const deptRows = await sql`SELECT id, code, hr_code FROM pf_portal_departments`;
+    const deptByCode = new Map();
+    for (const d of deptRows) {
+      if (d.code) deptByCode.set(String(d.code), d);
+      if (d.hr_code) deptByCode.set(String(d.hr_code), d);
+    }
+    const wpRows = await sql`SELECT id, code, hr_code, department_id FROM pf_portal_workplaces`;
+    const wpByCode = new Map();
+    for (const w of wpRows) {
+      if (w.code) wpByCode.set(String(w.code), w);
+      if (w.hr_code) wpByCode.set(String(w.hr_code), w);
+    }
+    // 引き当てられなかったコード（画面に出して、部署CSVの取込漏れに気づけるように）
+    const unknownDeptCodes = new Set();
+    const unknownWorkplaceCodes = new Set();
+
     // ===== 読み込み =====
     // まとめて読み、まとめて書く。1人ずつ SELECT + UPDATE を撃つと1,700名で
     // 3,400往復になり、Neon（HTTP接続）では1往復が数十msあるため数分かかって
@@ -183,15 +204,45 @@ module.exports = async (req, res) => {
         }
       }
 
+      // 所属の引き当て。退職者は所属を持たせない。
+      // コードが送られてこなければ現状のまま（ポータルで手で直した所属を消さない）。
+      let deptId = u ? u.department_id : null;
+      let wpId = u ? u.workplace_id : null;
+      if (retired) {
+        deptId = null;
+        wpId = null;
+      } else {
+        const deptCode = nz(e.departmentCode);
+        if (deptCode) {
+          const d = deptByCode.get(deptCode);
+          if (d) deptId = d.id;
+          else unknownDeptCodes.add(deptCode);
+        }
+        const wpCode = nz(e.workplaceCode);
+        if (wpCode) {
+          const w = wpByCode.get(wpCode);
+          // 職場は「その部署の配下」でなければ付けない（別部署の職場に付くのを防ぐ）
+          if (w && (!deptId || w.department_id === deptId)) {
+            wpId = w.id;
+            if (!deptId) deptId = w.department_id;
+          } else if (!w) {
+            unknownWorkplaceCodes.add(wpCode);
+          }
+        } else if (deptCode) {
+          // 部署だけ届いた＝部付け（職場なし）
+          wpId = null;
+        }
+      }
+
       const manager = nz(e.managerLoginId);
       upserts.push({
         loginId,
         name: nz(e.name) || (u ? u.name : loginId),
         hrStatus: status,
         retireDate: retired ? nzDate(e.retireDate) : null,
-        // 退職したら所属を外す＝各アプリの利用条件（部署のapps）から外れる。
-        // 在職者の所属はポータルの設定なので、この連携では触らない。
-        clearAffiliation: retired && u != null && (u.department_id != null || u.workplace_id != null),
+        deptId,
+        wpId,
+        affiliationChanged: !u || deptId !== u.department_id || wpId !== u.workplace_id,
         managerLoginId: manager && manager !== loginId ? manager : null,
         isNew: !u,
         retired,
@@ -199,40 +250,36 @@ module.exports = async (req, res) => {
     }
 
     // ===== ユーザーの upsert =====
-    // 既存行では role・can_manage・password_hash・approver_user_id・
-    // department_id・workplace_id に触れない（ポータルが持つ情報のため）。
+    // 既存行でも role・can_manage・password_hash・approver_user_id には触れない
+    // （ポータルが持つ情報のため）。所属は人事から届いたコードで引き当てた分だけ入る。
     const CHUNK = 500;
     const idByLoginId = new Map();
+    let affiliationSet = 0;
     for (let at = 0; at < upserts.length; at += CHUNK) {
       const part = upserts.slice(at, at + CHUNK);
       const col = (f) => part.map((x) => x[f]);
       const written = await sql`
-        INSERT INTO pf_portal_users (login_id, name, role, hr_status, retire_date)
-        SELECT login_id, name, 'member', hr_status, retire_date
+        INSERT INTO pf_portal_users
+          (login_id, name, role, hr_status, retire_date, department_id, workplace_id)
+        SELECT login_id, name, 'member', hr_status, retire_date, dept_id, wp_id
         FROM unnest(
           ${col("loginId")}::text[], ${col("name")}::text[],
-          ${col("hrStatus")}::text[], ${col("retireDate")}::date[]
-        ) AS v(login_id, name, hr_status, retire_date)
+          ${col("hrStatus")}::text[], ${col("retireDate")}::date[],
+          ${col("deptId")}::uuid[], ${col("wpId")}::uuid[]
+        ) AS v(login_id, name, hr_status, retire_date, dept_id, wp_id)
+        -- 所属は「人事が送ってきた値」をそのまま入れる。送られてこなかった人は
+        -- 組み立ての時点で現在値が入っているので、ここで消えることはない。
         ON CONFLICT (login_id) DO UPDATE SET
-          name        = COALESCE(EXCLUDED.name, pf_portal_users.name),
-          hr_status   = EXCLUDED.hr_status,
-          retire_date = EXCLUDED.retire_date
+          name          = COALESCE(EXCLUDED.name, pf_portal_users.name),
+          hr_status     = EXCLUDED.hr_status,
+          retire_date   = EXCLUDED.retire_date,
+          department_id = EXCLUDED.department_id,
+          workplace_id  = EXCLUDED.workplace_id
         RETURNING id, login_id, (xmax = 0) AS created`;
       for (const w of written) idByLoginId.set(w.login_id, w.id);
     }
-
-    // ===== 退職者の所属を外す =====
-    let affiliationCleared = 0;
-    const toClear = upserts.filter((x) => x.clearAffiliation).map((x) => idByLoginId.get(x.loginId)).filter(Boolean);
-    for (let at = 0; at < toClear.length; at += CHUNK) {
-      const part = toClear.slice(at, at + CHUNK);
-      const done = await sql`
-        UPDATE pf_portal_users
-        SET department_id = NULL, workplace_id = NULL
-        WHERE id = ANY(${part}::uuid[])
-        RETURNING id`;
-      affiliationCleared += done.length;
-    }
+    const affiliationCleared = upserts.filter((x) => x.retired && x.affiliationChanged).length;
+    affiliationSet = upserts.filter((x) => !x.retired && x.affiliationChanged && x.deptId).length;
 
     // ===== 承認者の反映 =====
     // 全員の行が揃ってから引く（承認者本人が同じ連携で作られていることがあるため）。
@@ -294,6 +341,10 @@ module.exports = async (req, res) => {
           : [],
       },
       affiliationCleared,
+      affiliationSet,
+      // ポータルに無かったコード。部署CSV・職場CSVの取込漏れに気づけるように返す
+      unknownDepartmentCodes: [...unknownDeptCodes].slice(0, 50),
+      unknownWorkplaceCodes: [...unknownWorkplaceCodes].slice(0, 50),
       approverSet,
     });
   } catch (e) {
