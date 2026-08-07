@@ -970,7 +970,6 @@
     }
     $("deptAddBtn").addEventListener("click", () => openDeptForm(null));
     $("dfCancel").addEventListener("click", () => { $("deptFormCard").classList.add("hidden"); editingDeptId = null; });
-    bindDeptReset();
 
     $("dfSave").addEventListener("click", async () => {
       const msg = $("dfMsg");
