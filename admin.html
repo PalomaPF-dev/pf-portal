@@ -970,7 +970,6 @@
     }
     $("deptAddBtn").addEventListener("click", () => openDeptForm(null));
     $("dfCancel").addEventListener("click", () => { $("deptFormCard").classList.add("hidden"); editingDeptId = null; });
-    bindDeptReset();
 
     $("dfSave").addEventListener("click", async () => {
       const msg = $("dfMsg");
@@ -1200,6 +1199,9 @@
         }
       });
     }
+    // 定義のすぐ後で呼ぶ。上（部署フォームの束ね）で呼ぶと DEPT_RESET_KEEP の
+    // 初期化前になり、参照した瞬間に script 全体が落ちて管理画面が真っ白になる。
+    bindDeptReset();
 
     // ===== ①-2 職場（部署配下）フォーム =====
     let editingWorkplaceId = null;
