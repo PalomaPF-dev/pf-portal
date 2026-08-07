@@ -446,15 +446,19 @@ module.exports = async (req, res) => {
           ${col("hireDate")}::date[], ${col("employmentType")}::text[]
         ) AS v(login_id, name, email, dept_id, wp_id,
                position_name, duty_name, hire_date, employment_type)
+        -- 人事管理は「ユーザーの存在・氏名・在籍状態・管理者」だけを送ってくる。
+        -- 送られてこない項目（部署・職場・役職・職務・入社日・雇用体系・メール）は
+        -- ポータル側の値をそのまま残す。COALESCE を外すと、送られない項目が
+        -- 一斉に NULL で潰れてしまう。
         ON CONFLICT (login_id) DO UPDATE SET
           name            = COALESCE(EXCLUDED.name, pf_portal_users.name),
           email           = COALESCE(EXCLUDED.email, pf_portal_users.email),
-          department_id   = EXCLUDED.department_id,
-          workplace_id    = EXCLUDED.workplace_id,
-          position_name   = EXCLUDED.position_name,
-          duty_name       = EXCLUDED.duty_name,
-          hire_date       = EXCLUDED.hire_date,
-          employment_type = EXCLUDED.employment_type
+          department_id   = COALESCE(EXCLUDED.department_id, pf_portal_users.department_id),
+          workplace_id    = COALESCE(EXCLUDED.workplace_id, pf_portal_users.workplace_id),
+          position_name   = COALESCE(EXCLUDED.position_name, pf_portal_users.position_name),
+          duty_name       = COALESCE(EXCLUDED.duty_name, pf_portal_users.duty_name),
+          hire_date       = COALESCE(EXCLUDED.hire_date, pf_portal_users.hire_date),
+          employment_type = COALESCE(EXCLUDED.employment_type, pf_portal_users.employment_type)
         RETURNING id, login_id, (xmax = 0) AS created`;
       for (const w of written) idByLoginId.set(w.login_id, w.id);
     }
