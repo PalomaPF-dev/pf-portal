@@ -446,6 +446,16 @@
           </table>
         </div>
         <div class="msg err hidden" id="deptMsg"></div>
+        <div class="note" style="border-color:#e6cccc;background:#fdf7f7">
+          <strong>部署設定をやり直す</strong>：<b id="deptResetKeep">D999</b> 以外の部署をすべて削除します。配下の職場も一緒に消え、
+          所属していたユーザーは<strong>部署・職場が未設定に戻ります</strong>（名簿からは消えません。パスワード・権限・承認者もそのままです）。
+          各アプリ側のアカウントも消えません。
+          <div style="margin-top:6px">
+            <button class="mini" id="deptResetPreview" type="button">消える件数を確認</button>
+            <button class="mini danger" id="deptResetRun" type="button" style="margin-left:6px" disabled>削除を実行</button>
+            <span class="sub" id="deptResetInfo" style="margin-left:8px"></span>
+          </div>
+        </div>
         <div class="note">
           <strong>表示アプリ</strong>は、ポータルの所属選択でこの部署を選んだときに表示されるアプリです。ユーザー登録時のアカウント発行もこの設定に基づきます（図面管理はアカウント不要のため発行対象外）。<br />
           各部署の行の下に<strong>職場</strong>（部署配下の単位）を登録できます。職場に管理者を設定すると、その職場の一般ユーザーの承認者（既定）になります。管理者を設定していない職場は、<strong>その職場に所属する管理者権限のユーザー</strong>（複数いる場合は社員番号順で最初の1名）が自動的に承認者になります。
@@ -960,6 +970,7 @@
     }
     $("deptAddBtn").addEventListener("click", () => openDeptForm(null));
     $("dfCancel").addEventListener("click", () => { $("deptFormCard").classList.add("hidden"); editingDeptId = null; });
+    bindDeptReset();
 
     $("dfSave").addEventListener("click", async () => {
       const msg = $("dfMsg");
@@ -1138,6 +1149,56 @@
       td.appendChild(box);
       tr.appendChild(td);
       return tr;
+    }
+
+    // ===== ①-1b 部署設定のやり直し（一括削除）=====
+    // 人事管理から取り込んだ部署・職場が積み上がった状態から作り直すための入口。
+    // 押し間違いで消えないよう「確認 → 実行」の2段にしてある。
+    const DEPT_RESET_KEEP = ["D999"];
+
+    async function deptResetCall(confirm) {
+      return api("/api/departments-reset", {
+        method: "POST",
+        body: JSON.stringify({ keepCodes: DEPT_RESET_KEEP, ...(confirm ? { confirm: "削除" } : {}) }),
+      });
+    }
+
+    function bindDeptReset() {
+      const info = $("deptResetInfo");
+      const run = $("deptResetRun");
+      $("deptResetKeep").textContent = DEPT_RESET_KEEP.join("・");
+      $("deptResetPreview").addEventListener("click", async () => {
+        const msg = $("deptMsg");
+        msg.classList.add("hidden");
+        try {
+          const r = await deptResetCall(false);
+          info.textContent =
+            "部署 " + r.departments + " 件・職場 " + r.workplaces + " 件が消え、" +
+            r.users + " 名の部署が未設定に戻ります。";
+          run.disabled = r.departments === 0;
+        } catch (e) {
+          msg.textContent = e.message;
+          msg.classList.remove("hidden");
+        }
+      });
+      run.addEventListener("click", async () => {
+        if (!window.confirm(
+          DEPT_RESET_KEEP.join("・") + " 以外の部署をすべて削除します。\n" +
+          "配下の職場も消え、所属していたユーザーは部署・職場が未設定に戻ります。\n実行しますか？"
+        )) return;
+        const msg = $("deptMsg");
+        msg.classList.add("hidden");
+        run.disabled = true;
+        try {
+          const r = await deptResetCall(true);
+          info.textContent = "部署 " + r.deleted + " 件を削除しました。部署を登録し直してください。";
+          await reloadAll();
+        } catch (e) {
+          msg.textContent = e.message;
+          msg.classList.remove("hidden");
+          run.disabled = false;
+        }
+      });
     }
 
     // ===== ①-2 職場（部署配下）フォーム =====
@@ -1384,7 +1445,18 @@
       return (u.role === "admin"
         ? '<span class="badge b-admin">管理者</span>'
         : '<span class="badge b-plain">一般</span>')
-        + (u.canManage ? '<span class="badge b-manage">ポータル管理</span>' : "");
+        + (u.canManage ? '<span class="badge b-manage">ポータル管理</span>' : "")
+        + hrStatusBadgeHtml(u);
+    }
+
+    // 在籍状態の目印。人事管理からの連携で入る値で、ポータルでは編集しない。
+    // 在籍中は何も出さない（全員に付くと目印にならないため）。
+    const HR_STATUS_LABEL = { leave: "休職", loaned: "出向", retired: "退職" };
+    function hrStatusBadgeHtml(u) {
+      const label = HR_STATUS_LABEL[u.hrStatus];
+      if (!label) return "";
+      const title = u.retireDate ? label + " " + esc(u.retireDate) : label;
+      return '<span class="badge b-plain" title="' + title + '">' + label + "</span>";
     }
 
     // 部署の絞り込み候補を作り直す（選択は可能な限り維持）

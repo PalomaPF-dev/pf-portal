@@ -126,7 +126,7 @@ module.exports = async (req, res) => {
       const users = await sql`
         SELECT u.id, u.login_id, u.name, u.email, u.department_id, u.role,
                u.workplace_id, u.approver_user_id, u.can_manage, u.created_at,
-               u.position_name, u.duty_name, u.lineworks_id,
+               u.position_name, u.duty_name, u.lineworks_id, u.hr_status, u.retire_date,
                d.code AS department_code, d.name AS department_name,
                w.code AS workplace_code, w.name AS workplace_name,
                a.name AS approver_name
@@ -169,6 +169,9 @@ module.exports = async (req, res) => {
           positionName: u.position_name,
           dutyName: u.duty_name,
           lineworksId: u.lineworks_id,
+          // 在籍状態は人事管理からの連携で入る（ポータルでは編集しない表示専用）
+          hrStatus: u.hr_status || null,
+          retireDate: u.retire_date || null,
           provisions: byUser.get(u.id) || [],
         }))
       );
