@@ -10,6 +10,7 @@
 const { requireSql, ensureSchema, readBody, isUuid } = require("../lib/db");
 const { verifyUserSession } = require("../lib/portalAuth");
 const { requireManageSession } = require("../lib/portalAuth");
+const { isConfigured: lineworksReady, sendTextToUser } = require("../lib/lineworks");
 
 // 問い合わせ分類（フロントの選択肢と一致させる）
 const CATEGORIES = [
@@ -27,7 +28,7 @@ const APP_NAMES = {
   keikaku: "生産計画", nippou: "生産日報", sekisai: "出荷積載", zumen: "図面管理",
   keisoku: "計測機器", setsubi: "設備管理", hinshitsu: "品質管理", zaiko: "在庫管理",
   kanagata: "型管理", hoju: "補充計画", tenchu: "転注管理", purchasing: "購買単価",
-  operation: "進捗管理",
+  jinji: "人事管理", operation: "進捗管理",
 };
 function normalizeApp(v) {
   const k = String(v || "").trim();
@@ -35,6 +36,92 @@ function normalizeApp(v) {
 }
 function appLabel(k) {
   return APP_NAMES[k] || "ポータル全体・その他";
+}
+
+// ===== LINE WORKS への通知 =====
+// メールとは別に、LINE WORKS の宛先が**登録されている人**にだけ送る。
+// 未登録の人にメールアドレスで代替送信はしない（メールは別に飛んでいるので
+// 二重になるだけ）。送信に失敗しても問い合わせの保存・回答は成立させる。
+const LW_MAX = 1800;
+
+function lineworksText(head, lines) {
+  const body = ["【業務ポータル】" + head, "", ...lines].join("\n");
+  return body.length > LW_MAX ? body.slice(0, LW_MAX - 1) + "…" : body;
+}
+
+/** 宛先（lineworks_id）へ順に送る。1件の失敗で全体を止めない。 */
+async function sendLineworksTo(dests, text) {
+  if (!lineworksReady() || dests.length === 0) return 0;
+  let sent = 0;
+  for (const d of dests) {
+    try {
+      await sendTextToUser(d, text);
+      sent++;
+    } catch (e) {
+      console.error("[contact] lineworks send failed:", e && e.message);
+    }
+  }
+  return sent;
+}
+
+/** 新しい問い合わせを、LINE WORKS を登録しているポータル管理者へ知らせる。 */
+async function notifyInquiryByLineworks(sql, inq) {
+  if (!lineworksReady()) return;
+  try {
+    const rows = await sql`
+      SELECT lineworks_id FROM pf_portal_users
+      WHERE can_manage IS TRUE AND lineworks_id IS NOT NULL AND btrim(lineworks_id) <> ''`;
+    const dests = rows.map((r) => String(r.lineworks_id).trim()).filter(Boolean);
+    await sendLineworksTo(
+      dests,
+      lineworksText("お問い合わせが届きました", [
+        "対象アプリ: " + appLabel(inq.app),
+        "分類: " + inq.category,
+        "社員番号: " + inq.loginId,
+        "氏名: " + inq.name,
+        "",
+        inq.message,
+        "",
+        "▼管理画面（ユーザー設定 › お問い合わせ）",
+        (process.env.PORTAL_ORIGIN || "https://portal.paloma-pf.com").replace(/\/+$/, "") + "/admin.html",
+      ]),
+    );
+  } catch (e) {
+    console.error("[contact] lineworks notify failed:", e && e.message);
+  }
+}
+
+/** 回答が付いたことを、LINE WORKS を登録している本人へ知らせる。 */
+async function notifyReplyByLineworks(sql, inq) {
+  if (!lineworksReady()) return;
+  try {
+    const rows = await sql`
+      SELECT lineworks_id FROM pf_portal_users WHERE login_id = ${inq.login_id} LIMIT 1`;
+    const to = rows[0] && rows[0].lineworks_id ? String(rows[0].lineworks_id).trim() : "";
+    if (!to) return;
+    const origin = (process.env.PORTAL_ORIGIN || "https://portal.paloma-pf.com").replace(/\/+$/, "");
+    await sendLineworksTo(
+      [to],
+      lineworksText("お問い合わせへの回答", [
+        inq.name + " さん",
+        "",
+        "お問い合わせいただいた件について回答しました。",
+        "",
+        "対象アプリ: " + appLabel(inq.app),
+        "分類: " + inq.category,
+        "お問い合わせ内容:",
+        inq.message,
+        "",
+        "―――― 回答 ――――",
+        inq.reply,
+        "",
+        "▼業務ポータル",
+        origin,
+      ]),
+    );
+  } catch (e) {
+    console.error("[contact] lineworks reply failed:", e && e.message);
+  }
 }
 
 const RL = new Map();
@@ -215,6 +302,7 @@ module.exports = async (req, res) => {
           RETURNING id, app, category, login_id, name, message, reply, replied_at, status`;
         if (r.length === 0) { res.status(404).json({ message: "見つかりません" }); return; }
         await sendReplyMail(sql, r[0]);
+        await notifyReplyByLineworks(sql, r[0]);
         res.status(200).json({ ok: true, status: r[0].status, repliedAt: r[0].replied_at });
         return;
       }
@@ -261,6 +349,7 @@ module.exports = async (req, res) => {
       INSERT INTO pf_portal_inquiries (app, category, login_id, name, message)
       VALUES (${app}, ${category}, ${loginId}, ${name}, ${message})`;
     await sendMail({ app, category, loginId, name, message });
+    await notifyInquiryByLineworks(sql, { app, category, loginId, name, message });
     res.status(200).json({ ok: true });
   } catch (e) {
     console.error("[contact]", e);
