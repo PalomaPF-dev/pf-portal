@@ -446,6 +446,15 @@
           </table>
         </div>
         <div class="msg err hidden" id="deptMsg"></div>
+        <div class="note" style="border-color:#cfe3d8;background:#f4faf6">
+          <strong>工場・職場マスタの配信</strong>：ここで設定した<strong>工場</strong>（種別「工場」の部署）と、その配下の<strong>職場</strong>は、
+          在庫管理など対応アプリへ<strong>自動で配信</strong>されます（アプリ側では追加・変更できません）。
+          初回の連携時や、アプリ側にうまく反映されないときは、下のボタンで手動で再配信できます。
+          <div style="margin-top:6px">
+            <button class="mini" id="masterResyncBtn" type="button">工場・職場マスタを再配信</button>
+            <span class="sub" id="masterResyncInfo" style="margin-left:8px"></span>
+          </div>
+        </div>
         <div class="note" style="border-color:#e6cccc;background:#fdf7f7">
           <strong>部署設定をやり直す</strong>：<b id="deptResetKeep">D999</b> 以外の部署をすべて削除します。配下の職場も一緒に消え、
           所属していたユーザーは<strong>部署・職場が未設定に戻ります</strong>（名簿からは消えません。パスワード・権限・承認者もそのままです）。
@@ -1213,6 +1222,40 @@
     // 定義のすぐ後で呼ぶ。上（部署フォームの束ね）で呼ぶと DEPT_RESET_KEEP の
     // 初期化前になり、参照した瞬間に script 全体が落ちて管理画面が真っ白になる。
     bindDeptReset();
+
+    // ===== ①-1c 工場・職場マスタの手動再配信 =====
+    // 工場（種別「工場」の部署）と職場は、追加・編集時に各アプリへ自動配信される。
+    // ここは初回連携や反映漏れのときに、現在の内容を手動で流し直すための入口。
+    function bindMasterResync() {
+      const btn = $("masterResyncBtn");
+      const info = $("masterResyncInfo");
+      if (!btn) return;
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        info.textContent = "再配信中…";
+        try {
+          const r = await api("/api/workplaces", {
+            method: "POST",
+            body: JSON.stringify({ action: "resync" }),
+          });
+          const results = (r && r.results) || [];
+          const ok = results.filter((x) => x && x.ok).length;
+          if (results.length === 0) {
+            info.textContent = "配信対象のアプリがありません（連携キーの設定をご確認ください）。";
+          } else if (ok === results.length) {
+            info.textContent = "再配信しました（" + ok + "アプリ）。";
+          } else {
+            const failed = results.filter((x) => !x || !x.ok).map((x) => (x && x.app) || "?").join("・");
+            info.textContent = "再配信しました（成功 " + ok + " / " + results.length + "）。未達: " + failed;
+          }
+        } catch (e) {
+          info.textContent = "エラー: " + e.message;
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    }
+    bindMasterResync();
 
     // ===== ②-0 名簿のやり直し（ユーザーの一括削除）=====
     // 部署と同じく「確認 → 実行」の2段。ポータル管理者とログイン中の本人は
