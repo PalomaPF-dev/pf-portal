@@ -265,6 +265,27 @@ module.exports = async (req, res) => {
         res.status(400).json({ message: "id が不正です" });
         return;
       }
+
+      // パスワードのリセット（ポータル管理者が実施）。
+      // アプリ側の「パスワードをお忘れの方」導線は廃止し、パスワードの管理はポータルに集約した。
+      // ここでは password_hash を消すだけで、本人が次回ログイン時に
+      // 「初めてログインする方はこちら（パスワード設定）」から自分で再設定する。
+      // 管理者が新しいパスワードを知ることはない（設定するのは本人）。
+      if (body.action === "resetPassword") {
+        const target = await sql`
+          SELECT id, login_id, name FROM pf_portal_users WHERE id = ${id} LIMIT 1`;
+        if (target.length === 0) {
+          res.status(404).json({ message: "対象のユーザーが見つかりません" });
+          return;
+        }
+        await sql`UPDATE pf_portal_users SET password_hash = NULL WHERE id = ${id}`;
+        res.status(200).json({
+          ok: true,
+          loginId: target[0].login_id,
+          name: target[0].name,
+        });
+        return;
+      }
       const cur = await sql`
         SELECT id, login_id, name, email, department_id, role, workplace_id, approver_user_id,
                can_manage, manage_password_hash, lineworks_id

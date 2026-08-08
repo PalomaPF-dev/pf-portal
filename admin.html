@@ -1759,6 +1759,33 @@
             bi.className = "mini"; bi.type = "button"; bi.textContent = "詳細";
             bi.style.marginLeft = "6px";
             bi.addEventListener("click", () => openUserDetail(u));
+            // パスワードのリセット。パスワード管理はポータルに集約したため、
+            // 忘れた場合はここで解除し、本人に「初めてログイン」から再設定してもらう。
+            const bp = document.createElement("button");
+            bp.className = "mini"; bp.type = "button"; bp.textContent = "パスワード再設定";
+            bp.style.marginLeft = "6px";
+            bp.addEventListener("click", async () => {
+              if (!window.confirm(
+                u.name + "（" + u.loginId + "）のパスワードを未設定に戻します。\n" +
+                "本人がポータルのログイン画面で「初めてログインする方はこちら」から\n" +
+                "新しいパスワードを設定できるようになります。\n実行しますか？"
+              )) return;
+              bp.disabled = true;
+              try {
+                await api("/api/users", {
+                  method: "PUT",
+                  body: JSON.stringify({ id: u.id, action: "resetPassword" }),
+                });
+                window.alert(
+                  u.name + " のパスワードを未設定に戻しました。\n" +
+                  "本人にポータルのログイン画面から再設定するようご案内ください。"
+                );
+                await reloadAll();
+              } catch (e) {
+                window.alert("失敗しました: " + e.message);
+                bp.disabled = false;
+              }
+            });
             // 1名ずつの削除。ログイン中の本人だけは押せない（管理画面に入れなくなるため）
             const bd = document.createElement("button");
             bd.className = "mini danger"; bd.type = "button"; bd.textContent = "削除";
@@ -1779,6 +1806,7 @@
             });
             cell.appendChild(be);
             cell.appendChild(bi);
+            cell.appendChild(bp);
             cell.appendChild(bd);
             rows.push(tr);
           }

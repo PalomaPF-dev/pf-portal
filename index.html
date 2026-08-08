@@ -1231,10 +1231,48 @@
       }
     });
 
+    /**
+     * 一括ログアウト。
+     * セッションは各アプリの Cookie（別ドメイン）で持つため、ポータルの Cookie を消すだけでは
+     * アプリ側にログインが残ってしまう（最大30日）。先に各アプリの /api/logout を
+     * 非表示 iframe で叩き、アプリ自身に Cookie を破棄させてから、ポータルのセッションを消す。
+     * 個々のアプリが落ちていても全体を止めないよう、成否は待たずに一定時間で切り上げる。
+     */
+    async function sweepAppSessions() {
+      let urls = [];
+      try {
+        const r = await fetch("/api/user?logout=1", { headers: { Accept: "application/json" } });
+        const d = await r.json().catch(() => null);
+        urls = d && Array.isArray(d.urls) ? d.urls : [];
+      } catch {}
+      if (urls.length === 0) return;
+      const box = document.createElement("div");
+      box.setAttribute("aria-hidden", "true");
+      box.style.cssText = "position:absolute;width:0;height:0;overflow:hidden;border:0";
+      for (const u of urls) {
+        const f = document.createElement("iframe");
+        f.src = u;
+        box.appendChild(f);
+      }
+      document.body.appendChild(box);
+      // 各アプリの応答は待ちきらない（Cookie 破棄はブラウザ側で完了する）
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      box.remove();
+    }
+
     $("logoutBtn").addEventListener("click", async () => {
+      const btn = $("logoutBtn");
+      const label = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "ログアウト中…";
+      try {
+        await sweepAppSessions();
+      } catch {}
       try {
         await fetch("/api/user", { method: "DELETE" });
       } catch {}
+      btn.disabled = false;
+      btn.textContent = label;
       setHeaderUser(null);
       switchMode("login");
       showView("login");
@@ -1242,6 +1280,21 @@
 
     // ===== 起動時: セッション確認 → アプリ一覧 or ログイン =====
     (async function boot() {
+      // 各アプリの「ログアウト」から ?logout=1 で戻ってきた場合は、
+      // ここで全アプリ＋ポータルのセッションをまとめて破棄する（アプリ単体では自分の分しか消せないため）。
+      if (new URLSearchParams(location.search).has("logout")) {
+        history.replaceState(null, "", location.pathname);
+        try {
+          await sweepAppSessions();
+        } catch {}
+        try {
+          await fetch("/api/user", { method: "DELETE" });
+        } catch {}
+        setHeaderUser(null);
+        switchMode("login");
+        showView("login");
+        return;
+      }
       try {
         const r = await fetch("/api/user", { headers: { "Accept": "application/json" } });
         if (r.ok) {
