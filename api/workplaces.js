@@ -5,8 +5,19 @@
 // DELETE 管理者: 削除 {id}（所属ユーザーの workplace_id はアプリ側で NULL 化）
 const { requireSql, ensureSchema, readBody, isUuid } = require("../lib/db");
 const { requireManageSession } = require("../lib/portalAuth");
+const { syncMastersToApps } = require("../lib/masterSync");
 
 const CODE_RE = /^[A-Za-z0-9_-]+$/;
+
+// 職場を変更したら工場・職場マスタを各アプリへ再配信する（best-effort）。
+// 失敗しても管理操作自体は成功扱いにする（配信は非同期に再試行され得る運用前提）。
+async function resyncMasters(sql) {
+  try {
+    await syncMastersToApps(sql);
+  } catch (e) {
+    console.warn("[workplaces] master sync failed:", e && e.message);
+  }
+}
 
 // adminUserId の検証: null なら OK、指定時は role='admin' の既存ユーザーであること。
 // NG なら res に 400 を書いて false を返す。
@@ -59,6 +70,12 @@ module.exports = async (req, res) => {
 
     if (req.method === "POST") {
       const body = readBody(req);
+      // 手動の全体再配信（初回連携・設定変更の即時反映用）。職場は作らない。
+      if (body.action === "resync") {
+        const results = await syncMastersToApps(sql);
+        res.status(200).json({ ok: true, results });
+        return;
+      }
       const departmentId = body.departmentId;
       const code = String(body.code || "").trim();
       const name = String(body.name || "").trim();
@@ -76,6 +93,7 @@ module.exports = async (req, res) => {
         INSERT INTO pf_portal_workplaces (department_id, code, name, admin_user_id, sort)
         VALUES (${departmentId}, ${code}, ${name}, ${adminUserId}, ${sort})
         RETURNING id, department_id, code, name, admin_user_id, sort`;
+      await resyncMasters(sql);
       res.status(201).json({
         id: rows[0].id,
         departmentId: rows[0].department_id,
@@ -113,6 +131,7 @@ module.exports = async (req, res) => {
             admin_user_id = ${adminUserId}, sort = ${sort}
         WHERE id = ${id}
         RETURNING id, department_id, code, name, admin_user_id, sort`;
+      await resyncMasters(sql);
       res.status(200).json({
         id: rows[0].id,
         departmentId: rows[0].department_id,
@@ -131,6 +150,7 @@ module.exports = async (req, res) => {
       // workplace_id は FK なしのためアプリ側で NULL 化してから削除
       await sql`UPDATE pf_portal_users SET workplace_id = NULL WHERE workplace_id = ${id}`;
       await sql`DELETE FROM pf_portal_workplaces WHERE id = ${id}`;
+      await resyncMasters(sql);
       res.status(200).json({ ok: true });
       return;
     }

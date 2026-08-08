@@ -5,8 +5,19 @@
 // DELETE 管理者: 削除 {id}（所属ユーザーの department_id は SET NULL）
 const { requireSql, ensureSchema, readBody, isUuid, ALL_APP_KEYS } = require("../lib/db");
 const { requireManageSession } = require("../lib/portalAuth");
+const { syncMastersToApps } = require("../lib/masterSync");
 
 const CODE_RE = /^[A-Za-z0-9_-]+$/;
+
+// 工場（kind='factory' の部署）を変更したら工場・職場マスタを各アプリへ再配信する。
+// best-effort（失敗しても管理操作は成功扱い）。
+async function resyncMasters(sql) {
+  try {
+    await syncMastersToApps(sql);
+  } catch (e) {
+    console.warn("[departments] master sync failed:", e && e.message);
+  }
+}
 
 function normalizeApps(input) {
   if (!Array.isArray(input)) return [];
@@ -54,6 +65,7 @@ module.exports = async (req, res) => {
         INSERT INTO pf_portal_departments (code, kind, name, description, apps, sort)
         VALUES (${code}, ${kind}, ${name}, ${description}, ${JSON.stringify(apps)}::jsonb, ${sort})
         RETURNING id, code, kind, name, description, apps, sort`;
+      if (kind === "factory") await resyncMasters(sql);
       res.status(201).json(rows[0]);
       return;
     }
@@ -85,6 +97,8 @@ module.exports = async (req, res) => {
             apps = ${JSON.stringify(apps)}::jsonb, sort = ${sort}
         WHERE id = ${id}
         RETURNING id, code, kind, name, description, apps, sort`;
+      // 工場の変更（名称・並び順・種別変更）を配信。旧種別が factory だった場合も含め再配信する。
+      if (kind === "factory" || prev.kind === "factory") await resyncMasters(sql);
       res.status(200).json(rows[0]);
       return;
     }
