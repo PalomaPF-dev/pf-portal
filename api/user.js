@@ -76,6 +76,36 @@ function queryParam(req, name) {
   return v.trim();
 }
 
+// ===== GET ?logout=1: 一括ログアウト用のURL一覧 =====
+//
+// セッションは各アプリの Cookie（別ドメイン）で持つため、ポータルの Cookie を消すだけでは
+// アプリ側にログインが残る。ここで各アプリの /api/logout 宛に署名付きURLを発行し、
+// 画面側が非表示 iframe で順に叩いて各アプリ自身に Cookie を破棄させる（front-channel logout）。
+// 署名は SSO と同じ HMAC-SHA256（PF_PROVISION_KEY）。有効期限も同じく短命。
+async function handleLogoutUrls(req, res) {
+  const session = verifyUserSession(req);
+  // 未ログインでも 200 で空配列（画面側はそのままログアウト完了として進む）
+  if (!session) {
+    res.status(200).json({ ok: true, urls: [] });
+    return;
+  }
+  const provisionKey = (process.env.PF_PROVISION_KEY || "").trim();
+  if (!provisionKey) {
+    res.status(200).json({ ok: true, urls: [] });
+    return;
+  }
+  // 所属アプリに関わらず全SSOアプリを対象にする。
+  // 部署の割当が変わっても、以前ログインして残っているセッションを消し漏らさないため。
+  const urls = SSO_APP_KEYS.map((app) => {
+    const payload = Buffer.from(
+      JSON.stringify({ loginId: session.loginId, app, exp: Date.now() + TOKEN_TTL_MS })
+    ).toString("base64url");
+    const sig = crypto.createHmac("sha256", provisionKey).update(payload).digest("hex");
+    return `${appBaseUrl(app)}/api/logout?token=${encodeURIComponent(`${payload}.${sig}`)}`;
+  });
+  res.status(200).json({ ok: true, urls });
+}
+
 // ===== GET ?launch=<key>: SSOランチャー =====
 async function handleLaunch(req, res, app) {
   const session = verifyUserSession(req);
@@ -267,6 +297,7 @@ module.exports = async (req, res) => {
   }
 
   if (req.method === "GET") {
+    if (queryParam(req, "logout")) return handleLogoutUrls(req, res);
     const app = queryParam(req, "launch");
     if (app) return handleLaunch(req, res, app);
     return handleSession(req, res);
