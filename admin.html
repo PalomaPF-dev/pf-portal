@@ -1340,12 +1340,30 @@
     function renderUserDeptSelect() {
       const sel = $("ufDept");
       const keep = sel.value;
-      sel.replaceChildren(...departments.map((d) => {
+      const mkOpt = (d) => {
         const o = document.createElement("option");
         o.value = d.id;
         o.textContent = (d.code ? d.code + " " : "") + d.name;
         return o;
-      }));
+      };
+      // 部署と工場を分けて見せる（工場が選択肢に埋もれないように）。工場を選ぶと
+      // 配下の職場が「職場」欄に読み込まれ、そこから職場を選べる。
+      const depts = departments.filter((d) => d.kind !== "factory");
+      const factories = departments.filter((d) => d.kind === "factory");
+      const groups = [];
+      if (depts.length) {
+        const g = document.createElement("optgroup");
+        g.label = "部署";
+        depts.forEach((d) => g.appendChild(mkOpt(d)));
+        groups.push(g);
+      }
+      if (factories.length) {
+        const g = document.createElement("optgroup");
+        g.label = "工場";
+        factories.forEach((d) => g.appendChild(mkOpt(d)));
+        groups.push(g);
+      }
+      sel.replaceChildren(...groups);
       if (keep && [...sel.options].some((o) => o.value === keep)) sel.value = keep;
     }
 
